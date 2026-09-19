@@ -4,7 +4,7 @@
     "description": "Custom Bots - Advanced PvP System for Bedrock Edition",
     "name": "Custom Bots [BE]",
     "uuid": "8c9e7f6d-5b4a-3c2d-1e0f-9a8b7c6d5e4f",
-    "version": [1, 1, 0],
+    "version": [1, 2, 0],
     "min_engine_version": [1, 21, 0]
   },
   "modules": [
@@ -12,12 +12,12 @@
       "description": "Custom Bots - Behavior",
       "type": "data",
       "uuid": "a3b8c9d0-e1f2-4a3b-8c9d-0e1f2a3b4c5d",
-      "version": [1, 1, 0]
+      "version": [1, 2, 0]
     },
     {
       "type": "script",
       "uuid": "b4c5d6e7-f8a9-4b0c-8d1e-2f3a4b5c6d7e",
-      "version": [1, 1, 0],
+      "version": [1, 2, 0],
       "entry": "scripts/main.js",
       "language": "javascript"
     }
@@ -25,7 +25,7 @@
   "dependencies": [
     {
       "uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "version": [1, 1, 0]
+      "version": [1, 2, 0]
     },
     {
       "version": "1.9.0",
