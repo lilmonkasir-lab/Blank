@@ -489,7 +489,7 @@
         }
       },
       "minecraft:loot": {
-        "table": "loot_tables/entities/diamond_loot.json"
+        "table": "loot_tables/entities/diamondl.json"
       }
     },
     "events": {
