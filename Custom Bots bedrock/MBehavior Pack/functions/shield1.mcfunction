@@ -1,0 +1,1 @@
+event entity @s army21:try_shield

@@ -1,0 +1,43 @@
+{
+  "format_version": "1.10.0",
+  "render_controllers": {
+    "controller.render.ai1_ai": {
+      "arrays": {
+        "textures": {
+          "Array.skins": [
+            "Texture.skin0"
+          ]
+        }
+      },
+      "geometry": "Geometry.default",
+      "materials": [ { "*": "Material.default" } ],
+      "textures": [ "Array.skins[query.variant]" ]
+    },
+    "controller.render.bot.cape": {
+      "arrays": {
+        "textures": {
+          "Array.capes": [
+            "Texture.cape_none",
+            "Texture.cape_1",
+            "Texture.cape_2",
+            "Texture.cape_3",
+            "Texture.cape_4",
+            "Texture.cape_5",
+            "Texture.cape_6",
+            "Texture.cape_7",
+            "Texture.cape_8",
+            "Texture.cape_9",
+            "Texture.cape_10"
+          ]
+        }
+      },
+      "geometry": "Geometry.cape",
+      "materials": [
+        { "*": "Material.cape" }
+      ],
+      "textures": [
+        "Array.capes[query.mark_variant]"
+      ]
+    }
+  }
+}

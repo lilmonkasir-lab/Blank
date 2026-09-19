@@ -1,0 +1,68 @@
+{
+  "custom_sound.horncustom1": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/horncustom1"
+    ]
+  },
+  "custom_sound.crit": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/crit"
+    ]
+  },
+  "custom_sound.crit2": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/crit2"
+    ]
+  },
+  "custom_sound.crit3": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/crit3"
+    ]
+  },
+  "custom_sound.tp": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/tp"
+    ]
+  },
+  "custom_sound.lunge": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/lunge"
+    ]
+  },
+  "custom_sound.gaps": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/gaps"
+    ]
+  },
+  "custom_sound.horncustom": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/horncustom"
+    ]
+  },
+  "custom_sound.sweepbt": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/sweepbt"
+    ]
+  },
+  "custom_sound.beat1": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/beat1"
+    ]
+  },
+  "custom_sound.death1": {
+    "category": "neutral",
+    "sounds": [
+      "sounds/custom_sound/death1"
+    ]
+  }
+}

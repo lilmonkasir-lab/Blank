@@ -1,0 +1,74 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.pvb.root": {
+      "initial_state": "third_person",
+      "states": {
+        "third_person": {
+          "animations": [
+            "humanoid_base_pose",
+            {
+              "look_at_target": "!query.is_sleeping \u0026\u0026 !query.is_emoting"
+            },
+            "move.arms",
+            "move.legs",
+            "cape",
+            {
+              "riding.arms": "query.is_riding"
+            },
+            {
+              "riding.legs": "query.is_riding"
+            },
+            "holding",
+            {
+              "brandish_spear": "variable.is_brandishing_spear"
+            },
+            {
+              "charging": "query.is_charging"
+            },
+            {
+              "sneaking": "query.is_sneaking \u0026\u0026 !query.is_sleeping"
+            },
+            "bob",
+            {
+              "damage_nearby_mobs": "variable.damage_nearby_mobs"
+            },
+            {
+              "swimming": "variable.swim_amount \u003e 0.0"
+            },
+            {
+              "swimming.legs": "variable.swim_amount \u003e 0.0"
+            },
+            {
+              "use_item_progress": "( variable.use_item_interval_progress \u003e 0.0 ) || ( variable.use_item_startup_progress \u003e 0.0 ) \u0026\u0026 !variable.is_brandishing_spear"
+            },
+            {
+              "fishing_rod": "query.get_equipped_item_name \u003d\u003d \u0027fishing_rod\u0027"
+            },
+            {
+              "sleeping": "query.is_sleeping"
+            },
+            {
+              "attack.positions": "variable.attack_time \u003e\u003d 0.0"
+            },
+            {
+              "attack.rotations": "variable.attack_time \u003e\u003d 0.0"
+            },
+            {
+              "shield_block_main_hand": "query.blocking \u0026\u0026 query.get_equipped_item_name(\u0027off_hand\u0027) !\u003d \u0027shield\u0027 \u0026\u0026 query.get_equipped_item_name \u003d\u003d \u0027shield\u0027"
+            },
+            {
+              "shield_block_off_hand": "query.blocking \u0026\u0026 query.get_equipped_item_name(\u0027off_hand\u0027) \u003d\u003d \u0027shield\u0027 \u0026\u0026 !(variable.item_use_normalized \u003e 0 \u0026\u0026 variable.item_use_normalized \u003c 1.0)"
+            },
+            {
+              "crossbow_controller": "query.get_equipped_item_name \u003d\u003d \u0027crossbow\u0027"
+            },
+            {
+              "third_person_bow_equipped": "query.get_equipped_item_name \u003d\u003d \u0027bow\u0027"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

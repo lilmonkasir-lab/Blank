@@ -1,0 +1,124 @@
+{
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:netherite_sword",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_with_levels",
+              "levels": {
+                "sharpness": 4,
+                "fire_aspect": 2,
+                "unbreaking": 3,
+                "mending": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:netherite_helmet",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_with_levels",
+              "levels": {
+                "protection": 5,
+                "unbreaking": 3,
+                "mending": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:netherite_chestplate",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_with_levels",
+              "levels": {
+                "protection": 5,
+                "unbreaking": 3,
+                "mending": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:netherite_leggings",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_with_levels",
+              "levels": {
+                "protection": 5,
+                "unbreaking": 3,
+                "mending": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:netherite_boots",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_with_levels",
+              "levels": {
+                "protection": 5,
+                "unbreaking": 3,
+                "mending": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:shield",
+          "weight": 1,
+          "functions": [
+            {
+              "function": "enchant_with_levels",
+              "levels": {
+                "unbreaking": 3,
+                "mending": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1007 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "bot:army21",
+      "is_spawnable": true,
+      "is_summonable": true,
+      "is_experimental": false,
+      "scripts": {
+        "animate": [
+          "ai"
+        ]
+      },
+      "animations": {
+        "ai": "controller.animation.bot_army21.ai"
+      },
+      "properties": {
+        "bot:pearl_active": {
+          "client_sync": true,
+          "type": "int",
+          "range": [0, 1],
+          "default": 0
+        }
+      }
+    },
+    "component_groups": {
+      "model_female": {
+        "minecraft:variant": {
+          "value": 1
+        }
+      },
+      "skin0": {
+        "minecraft:variant": {
+          "value": 0
+        }
+      },
+      "skin1": {
+        "minecraft:variant": {
+          "value": 1
+        }
+      },
+      "skin2": {
+        "minecraft:variant": {
+          "value": 2
+        }
+      },
+      "skin3": {
+        "minecraft:variant": {
+          "value": 3
+        }
+      },
+      "skin4": {
+        "minecraft:variant": {
+          "value": 4
+        }
+      },
+      "skin5": {
+        "minecraft:variant": {
+          "value": 5
+        }
+      },
+      "cape:0": {
+        "minecraft:mark_variant": {
+          "value": 0
+        }
+      },
+      "cape:1": {
+        "minecraft:mark_variant": {
+          "value": 1
+        }
+      },
+      "cape:2": {
+        "minecraft:mark_variant": {
+          "value": 2
+        }
+      },
+      "cape:3": {
+        "minecraft:mark_variant": {
+          "value": 3
+        }
+      },
+      "cape:4": {
+        "minecraft:mark_variant": {
+          "value": 4
+        }
+      },
+      "cape:5": {
+        "minecraft:mark_variant": {
+          "value": 5
+        }
+      },
+      "cape:6": {
+        "minecraft:mark_variant": {
+          "value": 6
+        }
+      },
+      "cape:7": {
+        "minecraft:mark_variant": {
+          "value": 7
+        }
+      },
+      "cape:8": {
+        "minecraft:mark_variant": {
+          "value": 8
+        }
+      },
+      "cape:9": {
+        "minecraft:mark_variant": {
+          "value": 9
+        }
+      },
+      "cape:10": {
+        "minecraft:mark_variant": {
+          "value": 10
+        }
+      },
+      "army21:shield_active_state": {
+        "minecraft:timer": {
+          "looping": false,
+          "time": 1,
+          "time_down_event": {
+            "event": "army21:shield_end",
+            "target": "self"
+          }
+        }
+      },
+      "army21:shield_cooldown": {
+        "minecraft:timer": {
+          "looping": false,
+          "time": 5,
+          "time_down_event": {
+            "event": "army21:shield_ready",
+            "target": "self"
+          }
+        }
+      },
+      "army21:throw_ender_pearl": {
+        "minecraft:behavior.ranged_attack": {
+          "priority": 1,
+          "attack_interval_min": 0.5,
+          "attack_interval_max": 0.6,
+          "attack_radius": 54,
+          "attack_radius_min": 4.5,
+          "charge_charged_trigger": 0.5,
+          "charge_shoot_trigger": 0.5,
+          "speed_multiplier": 1.2,
+          "ranged_fov": 360.0,
+          "target_dist": 3.0,
+          "must_see": true,
+          "filters": {
+            "all_of": [
+              {
+                "test": "on_ground",
+                "subject": "other",
+                "value": true
+              }
+            ]
+          }
+        },
+        "minecraft:shooter": {
+          "def": "minecraft:ender_pearl",
+          "power": 1.5
+        },
+        "minecraft:behavior.melee_attack": {
+          "priority": 2,
+          "speed_multiplier": 1.2,
+          "delay_the_blow": false,
+          "punch_speed": 4.0,
+          "target_dist": 2.8,
+          "max_dist": 3.5,
+          "random_stop_interval": 0.0,
+          "track_target": true,
+          "reach_multiplier": 3.0,
+          "stop_attack": false,
+          "melee_fov": 360.0
+        },
+        "minecraft:timer": {
+          "looping": false,
+          "time": 0.5,
+          "time_down_event": {
+            "event": "army21:return_to_melee",
+            "target": "self"
+          }
+        }
+      },
+      "army21:melee_mode": {
+        "minecraft:behavior.delayed_attack": {
+          "priority": 1,
+          "delay_the_blow": 0.0,
+          "reach_multiplier": 3.0,
+          "speed_multiplier": 1.2,
+          "attack_duration": 0.3,
+          "hit_delay_pct": 0.25
+        },
+        "minecraft:behavior.melee_attack": {
+          "priority": 2,
+          "speed_multiplier": 1.2,
+          "delay_the_blow": false,
+          "punch_speed": 4.0,
+          "target_dist": 2.8,
+          "max_dist": 3.5,
+          "random_stop_interval": 0.0,
+          "track_target": true,
+          "reach_multiplier": 3.0,
+          "stop_attack": false,
+          "melee_fov": 360.0
+        },
+        "minecraft:movement": {
+          "value": 0.3
+        }
+      },
+      "army21:shield_freeze": {
+        "minecraft:movement": {
+          "value": 0.1
+        },
+        "minecraft:behavior.delayed_attack": {
+          "priority": 1,
+          "delay_the_blow": 0.0,
+          "reach_multiplier": 0,
+          "speed_multiplier": 1.2,
+          "attack_duration": 0.3,
+          "hit_delay_pct": 0.4
+        },
+        "minecraft:behavior.melee_attack": {
+          "priority": 2,
+          "speed_multiplier": 1.2,
+          "delay_the_blow": false,
+          "punch_speed": 4.0,
+          "target_dist": 2.8,
+          "max_dist": 0,
+          "random_stop_interval": 0.0,
+          "track_target": false,
+          "reach_multiplier": 0,
+          "stop_attack": true,
+          "melee_fov": 360.0
+        },
+        "minecraft:movement": {
+          "value": 0.1
+        }
+      },
+      "army21:healing_mode": {
+        "minecraft:behavior.delayed_attack": {
+          "priority": 1,
+          "delay_the_blow": 0.0,
+          "reach_multiplier": 0,
+          "speed_multiplier": 1.2,
+          "attack_duration": 0.3,
+          "hit_delay_pct": 0.4
+        },
+        "minecraft:behavior.melee_attack": {
+          "priority": 2,
+          "speed_multiplier": 1.2,
+          "delay_the_blow": false,
+          "punch_speed": 4.0,
+          "target_dist": 2.8,
+          "max_dist": 0,
+          "random_stop_interval": 0.0,
+          "track_target": false,
+          "reach_multiplier": 0,
+          "stop_attack": true,
+          "melee_fov": 360.0
+        }
+      },
+      "army21:diamond_level": {
+        "minecraft:equipment": {
+          "table": "loot_tables/entities/diamond.json"
+        },
+        "minecraft:loot": {
+          "table": "loot_tables/entities/diamondl.json"
+        }
+      },
+      "army21:netherite_level": {
+        "minecraft:equipment": {
+          "table": "loot_tables/entities/netherite.json"
+        },
+        "minecraft:loot": {
+          "table": "loot_tables/entities/netheritel.json"
+        }
+      }
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "bot",
+          "mob"
+        ]
+      },
+      "minecraft:breathable": {
+        "totalSupply": 1000,
+        "suffocateTime": 0,
+        "generatesBubbles": false
+      },
+      "minecraft:health": {
+        "value": 20,
+        "max": 30
+      },
+      "minecraft:collision_box": {
+        "width": 0.6,
+        "height": 1.8
+      },
+      "minecraft:nameable": {
+        "default_trigger": {
+          "event": "skin0",
+          "target": "self"
+        },
+        "name_actions": [],
+        "always_show": true
+      },
+      "minecraft:movement": {
+        "value": 0.3
+      },
+      "minecraft:underwater_movement": {
+        "value": 0.1275
+      },
+      "minecraft:navigation.walk": {
+        "is_amphibious": true,
+        "can_path_over_water": true,
+        "can_pass_doors": true,
+        "can_open_doors": true,
+        "can_jump": true,
+        "can_swim": true,
+        "can_float": true,
+        "can_walk": true,
+        "avoid_water": false,
+        "avoid_lava": true,
+        "avoid_flowing_lava": true,
+        "can_path_from_air": true,
+        "can_break_doors": false
+      },
+      "minecraft:annotation.open_door": {},
+      "minecraft:movement.basic": {},
+      "minecraft:jump.static": {},
+      "minecraft:can_climb": {},
+      "minecraft:damage_sensor": [
+        {
+          "on_damage": {
+            "filters": {
+              "all_of": [
+                {
+                  "test": "has_tag",
+                  "value": "shield_active"
+                },
+                {
+                  "test": "is_family",
+                  "subject": "other",
+                  "value": "player"
+                },
+                {
+                  "test": "has_equipment",
+                  "subject": "other",
+                  "domain": "hand",
+                  "operator": "!=",
+                  "value": "minecraft:mace"
+                },
+                {
+                  "test": "has_damage",
+                  "subject": "self",
+                  "operator": "!=",
+                  "value": "fire_tick"
+                },
+                {
+                  "test": "has_damage",
+                  "subject": "self",
+                  "operator": "!=",
+                  "value": "fire"
+                }
+              ]
+            },
+            "event": "army21:shield_hit"
+          },
+          "deals_damage": false
+        }
+      ],
+      "minecraft:behavior.float": {
+        "priority": 0
+      },
+      "minecraft:behavior.open_door": {
+        "priority": 6,
+        "close_door_after": false
+      },
+      "minecraft:physics": {},
+      "minecraft:experience_reward": {
+        "on_death": "query.last_hit_by_player ? 10 : 0"
+      },
+      "minecraft:flying_speed": {
+        "value": 0.03
+      },
+      "minecraft:scale": {
+        "value": 1
+      },
+      "minecraft:attack": {
+        "damage": 1
+      },
+      "minecraft:follow_range": {
+        "value": 150
+      },
+      "minecraft:knockback_resistance": {
+        "value": 0.0
+      },
+      "minecraft:behavior.nearest_attackable_target": {
+        "priority": 3,
+        "within_radius": 100,
+        "reselect_targets": true,
+        "must_reach": false,
+        "must_see": false,
+        "entity_types": [
+          {
+            "filters": {
+              "any_of": [
+                {
+                  "test": "is_family",
+                  "subject": "other",
+                  "value": "player"
+                },
+                {
+                  "test": "is_family",
+                  "subject": "other",
+                  "value": "cinder"
+                },
+                {
+                  "test": "is_family",
+                  "subject": "other",
+                  "value": "tts"
+                }
+              ]
+            },
+            "max_dist": 100,
+            "must_see": false
+          }
+        ],
+        "speed_multiplier": 1.2,
+        "target_search_height": 190
+      },
+      "minecraft:fall_damage": {
+        "value": 0.0
+      },
+      "minecraft:on_death": {
+        "event": "on:death",
+        "target": "self"
+      },
+      "minecraft:on_hurt": {
+        "event": "on:hurt",
+        "target": "self"
+      },
+      "minecraft:on_hurt_by_player": {
+        "event": "on:hurt_by_player",
+        "target": "self"
+      },
+      "minecraft:on_ignite": {
+        "event": "on:ignite",
+        "target": "self"
+      },
+      "minecraft:on_target_acquired": {
+        "event": "on:target_acquired",
+        "target": "self"
+      },
+      "minecraft:on_target_escape": {
+        "event": "on:target_escape",
+        "target": "self"
+      },
+      "minecraft:on_wake_with_owner": {
+        "event": "on:wake_with_owner",
+        "target": "self"
+      },
+      "minecraft:behavior.avoid_block": {
+        "priority": 6,
+        "tick_interval": 10,
+        "search_range": 5,
+        "search_height": 3,
+        "sprint_speed_modifier": 1.2,
+        "target_selection_method": "nearest",
+        "target_blocks": [
+          "minecraft:water"
+        ],
+        "avoid_block_sound": "retreat",
+        "sound_interval": {
+          "range_min": 2.0,
+          "range_max": 5.0
+        }
+      },
+      "minecraft:equipment": {
+        "table": "loot_tables/entities/diamond.json"
+      },
+      "minecraft:conditional_bandwidth_optimization": {
+        "default_values": {
+          "max_optimized_distance": 100,
+          "max_dropped_ticks": 20,
+          "use_motion_prediction_hints": true
+        }
+      },
+      "minecraft:loot": {
+        "table": "loot_tables/entities/diamond_loot.json"
+      }
+    },
+    "events": {
+      "army21:diamond_init": {
+        "add": {
+          "component_groups": [
+            "army21:diamond_level"
+          ]
+        },
+        "queue_command": {
+          "command": [
+            "tag @s add diamond_level"
+          ]
+        }
+      },
+      "army21:netherite_init": {
+        "add": {
+          "component_groups": [
+            "army21:netherite_level"
+          ]
+        },
+        "queue_command": {
+          "command": [
+            "tag @s add netherite_level"
+          ]
+        }
+      },
+      "skin0": {
+        "add": {
+          "component_groups": [
+            "skin0"
+          ]
+        }
+      },
+      "skin1": {
+        "add": {
+          "component_groups": [
+            "skin1"
+          ]
+        }
+      },
+      "skin2": {
+        "add": {
+          "component_groups": [
+            "skin2"
+          ]
+        }
+      },
+      "skin3": {
+        "add": {
+          "component_groups": [
+            "skin3"
+          ]
+        }
+      },
+      "skin4": {
+        "add": {
+          "component_groups": [
+            "skin4"
+          ]
+        }
+      },
+      "skin5": {
+        "add": {
+          "component_groups": [
+            "skin5"
+          ]
+        }
+      },
+      "make_female": {
+        "add": {
+          "component_groups": [
+            "model_female"
+          ]
+        }
+      },
+      "make_male": {
+        "remove": {
+          "component_groups": [
+            "model_female"
+          ]
+        }
+      },
+      "minecraft:entity_spawned": {
+        "sequence": [
+          {
+            "filters": {
+              "test": "has_component",
+              "operator": "!=",
+              "value": "minecraft:variant"
+            },
+            "randomize": [
+              {
+                "weight": 1,
+                "add": {
+                  "component_groups": [
+                    "skin0",
+                    "cape:0"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 1,
+                "add": {
+                  "component_groups": [
+                    "skin1",
+                    "cape:1"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 1,
+                "add": {
+                  "component_groups": [
+                    "skin2",
+                    "cape:2"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 1,
+                "add": {
+                  "component_groups": [
+                    "skin3",
+                    "cape:3"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 1,
+                "add": {
+                  "component_groups": [
+                    "skin4",
+                    "cape:4"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 1,
+                "add": {
+                  "component_groups": [
+                    "skin5",
+                    "cape:5"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_female"
+                  ]
+                }
+              },
+              {
+                "weight": 2,
+                "add": {
+                  "component_groups": [
+                    "skin0",
+                    "cape:6"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 2,
+                "add": {
+                  "component_groups": [
+                    "skin1",
+                    "cape:7"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 2,
+                "add": {
+                  "component_groups": [
+                    "skin2",
+                    "cape:8"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 2,
+                "add": {
+                  "component_groups": [
+                    "skin3",
+                    "cape:9"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              },
+              {
+                "weight": 2,
+                "add": {
+                  "component_groups": [
+                    "skin4",
+                    "cape:10"
+                  ]
+                },
+                "queue_command": {
+                  "command": [
+                    "event entity @s make_male"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "queue_command": {
+              "command": [
+                "replaceitem entity @s slot.weapon.offhand 0 shield",
+                "tag @s add shield_ready"
+              ]
+            }
+          },
+          {
+            "add": {
+              "component_groups": [
+                "army21:melee_mode"
+              ]
+            }
+          },
+          {
+            "randomize": [
+              {
+                "weight": 70,
+                "queue_command": {
+                  "command": [
+                    "event entity @s army21:diamond_init"
+                  ]
+                }
+              },
+              {
+                "weight": 30,
+                "queue_command": {
+                  "command": [
+                    "event entity @s army21:netherite_init"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "minecraft:entity_transformed": {
+        "sequence": [
+          {
+            "filters": {
+              "test": "has_component",
+              "subject": "other",
+              "value": "minecraft:is_baby"
+            },
+            "add": {
+              "component_groups": [
+                "baby"
+              ]
+            }
+          },
+          {
+            "filters": {
+              "test": "has_component",
+              "subject": "other",
+              "operator": "!=",
+              "value": "minecraft:is_baby"
+            },
+            "add": {
+              "component_groups": [
+                "adult"
+              ]
+            }
+          }
+        ]
+      },
+      "minecraft:entity_born": {
+        "sequence": [
+          {
+            "add": {
+              "component_groups": [
+                "baby"
+              ]
+            }
+          }
+        ]
+      },
+      "minecraft:ageable_grow_up": {
+        "sequence": [
+          {
+            "remove": {
+              "component_groups": [
+                "baby"
+              ]
+            },
+            "add": {
+              "component_groups": [
+                "adult"
+              ]
+            }
+          }
+        ]
+      },
+      "on:death": {
+        "queue_command": {
+          "command": [
+            "function custom1"
+          ]
+        }
+      },
+      "on:hurt": {
+        "queue_command": {
+          "command": []
+        }
+      },
+      "on:hurt_by_player": {
+        "queue_command": {
+          "command": []
+        }
+      },
+      "on:ignite": {
+        "queue_command": {
+          "command": []
+        }
+      },
+      "on:target_acquired": {
+        "queue_command": {
+          "command": [
+            "function nothing"
+          ]
+        }
+      },
+      "on:target_escape": {
+        "queue_command": {
+          "command": []
+        },
+        "remove": {
+          "component_groups": [
+            "army21:shield_active_state",
+            "army21:shield_cooldown"
+          ]
+        }
+      },
+      "on:wake_with_owner": {
+        "queue_command": {
+          "command": []
+        }
+      },
+      "army21:try_shield": {
+        "filters": {
+          "test": "has_tag",
+          "value": "shield_ready"
+        },
+        "remove": {
+          "component_groups": [
+            "army21:melee_mode"
+          ]
+        },
+        "add": {
+          "component_groups": [
+            "army21:shield_active_state",
+            "army21:shield_freeze"
+          ]
+        },
+        "queue_command": {
+          "command": [
+            "tag @s remove shield_ready",
+            "tag @s add shield_active",
+            "playanimation @s animation.player.custom1"
+          ]
+        }
+      },
+      "army21:shield_end": {
+        "remove": {
+          "component_groups": [
+            "army21:shield_active_state",
+            "army21:shield_freeze"
+          ]
+        },
+        "add": {
+          "component_groups": [
+            "army21:shield_cooldown",
+            "army21:melee_mode"
+          ]
+        },
+        "queue_command": {
+          "command": [
+            "tag @s remove shield_active"
+          ]
+        }
+      },
+      "army21:shield_ready": {
+        "remove": {
+          "component_groups": [
+            "army21:shield_cooldown"
+          ]
+        },
+        "queue_command": {
+          "command": [
+            "tag @s add shield_ready"
+          ]
+        }
+      },
+      "army21:stop_shield": {
+        "remove": {
+          "component_groups": [
+            "army21:shield_active_state",
+            "army21:shield_cooldown",
+            "army21:shield_freeze"
+          ]
+        },
+        "add": {
+          "component_groups": [
+            "army21:melee_mode"
+          ]
+        },
+        "queue_command": {
+          "command": [
+            "tag @s remove shield_active",
+            "tag @s add shield_ready"
+          ]
+        }
+      },
+      "army21:shield_hit": {
+        "queue_command": {
+          "command": [
+            "playsound item.shield.block @a ~~~"
+          ]
+        }
+      },
+      "army21:start_heal": {
+        "add": {
+          "component_groups": [
+            "army21:healing_mode"
+          ]
+        }
+      },
+      "army21:end_heal": {
+        "remove": {
+          "component_groups": [
+            "army21:healing_mode"
+          ]
+        }
+      },
+      "army21:throw_ender_pearl": {
+        "remove": {
+          "component_groups": [
+            "army21:melee_mode"
+          ]
+        },
+        "add": {
+          "component_groups": [
+            "army21:throw_ender_pearl"
+          ]
+        },
+        "queue_command": {
+          "command": [
+            "replaceitem entity @s slot.weapon.mainhand 1 ender_pearl",
+            "playanimation @s animation.custom.pearlt"
+          ]
+        }
+      },
+      "army21:return_to_melee": {
+        "remove": {
+          "component_groups": [
+            "army21:throw_ender_pearl"
+          ]
+        },
+        "add": {
+          "component_groups": [
+            "army21:melee_mode"
+          ]
+        }
+      }
+    }
+  }
+}

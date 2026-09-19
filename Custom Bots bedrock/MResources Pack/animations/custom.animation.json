@@ -1,0 +1,25 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.humanoid.sneak1": {
+			"loop": true,
+			"animation_length": 1,
+			"bones": {
+				"body": {
+					"rotation": [20, -3, 0],
+					"position": [0, -1.2, -3.8]
+				},
+				"head": {
+					"rotation": [0, 0, 0],
+					"position": [0, -1, 0]
+				},
+				"leftArm": {
+					"rotation": [10, 0, 0]
+				},
+				"rightArm": {
+					"rotation": [10, 0, 0]
+				}
+			}
+		}
+	}
+}

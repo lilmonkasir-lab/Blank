@@ -1,0 +1,68 @@
+{
+  "format_version": "1.8.0",
+  "render_controllers": {
+    "controller.render.ai3": {
+      "arrays": {
+        "textures": {
+          "Array.skins": [
+            "Texture.skin0",
+            "Texture.skin1",
+            "Texture.skin2",
+            "Texture.skin3",
+            "Texture.skin4",
+            "Texture.skin5"
+          ],
+          "Array.capes": [
+            "Texture.cape_0",
+            "Texture.cape_1",
+            "Texture.cape_2",
+            "Texture.cape_3",
+            "Texture.cape_4",
+            "Texture.cape_5",
+            "Texture.cape_6",
+            "Texture.cape_7",
+            "Texture.cape_8",
+            "Texture.cape_9",
+            "Texture.cape_10"
+          ]
+        }
+      },
+      "geometry": "query.variant == 0 ? Geometry.female : Geometry.default",
+      "materials": [
+        {
+          "*": "Material.default"
+        }
+      ],
+      "textures": [
+        "Array.skins[query.mark_variant]",
+        "Array.capes[query.mark_variant]"
+      ]
+    },
+    "controller.render.bot.cape": {
+      "arrays": {
+        "textures": {
+          "Array.capes": [
+            "Texture.cape_0",
+            "Texture.cape_1",
+            "Texture.cape_2",
+            "Texture.cape_3",
+            "Texture.cape_4",
+            "Texture.cape_5",
+            "Texture.cape_6",
+            "Texture.cape_7",
+            "Texture.cape_8",
+            "Texture.cape_9",
+            "Texture.cape_10"
+          ]
+        }
+      },
+      "geometry": "Geometry.cape",
+      "materials": [
+        { "*": "Material.cape" }
+      ],
+      "textures": [
+        "Array.capes[query.mark_variant]"
+      ]
+    }
+  }
+}

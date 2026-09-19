@@ -1,0 +1,15 @@
+{
+  "resource_pack_name": "vanilla",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "enemy": {
+      "textures": "textures/items/bot/enemy"
+    },
+    "allies": {
+      "textures": "textures/items/bot/allies"
+    },
+    "yungy_shield": {
+      "textures": "textures/items/yungy_shield"
+    }
+  }
+}
