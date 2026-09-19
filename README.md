@@ -22,3 +22,13 @@ The runtime defaults and implementation are in:
 `Custom Bots bedrock/MBehavior Pack/scripts/custom/pvp.js`
 
 The behavior pack must be loaded with the resource pack. The packs use the existing `@minecraft/server` 1.9.0 and `@minecraft/server-ui` 1.3.0 dependencies.
+
+## Importing the add-on
+
+Use the provided **`Custom Bots bedrock.mcaddon`** file. Do not rename the GitHub/source repository ZIP to `.mcaddon`; that ZIP has an extra `Blank-main/` folder, so Minecraft cannot find `manifest.json` and shows **Unknown Pack Name**. To rebuild the importable file after changing the packs, run:
+
+```bash
+python3 build_mcaddon.py
+```
+
+The builder creates two correctly rooted `.mcpack` files inside the `.mcaddon` container, with `manifest.json` at the root of each pack.
