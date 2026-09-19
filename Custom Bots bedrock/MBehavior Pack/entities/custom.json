@@ -369,6 +369,16 @@
             "event": "army21:shield_hit"
           },
           "deals_damage": false
+        },
+        {
+          "cause": "entity_explosion",
+          "on_damage": {
+            "filters": {
+              "test": "has_tag",
+              "value": "bot_crystal_protected"
+            }
+          },
+          "deals_damage": false
         }
       ],
       "minecraft:behavior.float": {

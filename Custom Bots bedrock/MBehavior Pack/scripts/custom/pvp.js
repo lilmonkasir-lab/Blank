@@ -16,6 +16,9 @@ import { isPlayerAllowedTarget } from "./targeting";
  */
 
 export const PVP_CONFIG = {
+    // Conservative Bedrock survival reach. All block placement in this
+    // module is rejected beyond this distance.
+    placementReach: 5.0,
     crystal: {
         enabled: true,
         comboPops: 4,
@@ -83,6 +86,8 @@ const CRYSTAL_BASES = new Set([
 const crystalStates = new Map();
 const bridgeStates = new Map();
 const combatStates = new Map();
+const CRYSTAL_PROTECTION_TAG = "bot_crystal_protected";
+const CRYSTAL_PROTECTION_TICKS = 8;
 
 function isValid(entity) {
     try {
@@ -244,7 +249,29 @@ function faceTarget(bot, target) {
     } catch (error) {}
 }
 
+function canReachPlacement(bot, location) {
+    try {
+        const eyeLocation = {
+            x: bot.location.x,
+            y: bot.location.y + 1.62,
+            z: bot.location.z
+        };
+        const blockCenter = {
+            x: location.x + 0.5,
+            y: location.y + 0.5,
+            z: location.z + 0.5
+        };
+        return distance3d(eyeLocation, blockCenter) <= PVP_CONFIG.placementReach + 0.05;
+    } catch (error) {
+        return false;
+    }
+}
+
 function runSetBlock(bot, location, blockId) {
+    // Commands are used for reliable block placement, but the range check
+    // happens first so this cannot become a long-distance placement exploit.
+    if (!canReachPlacement(bot, location)) return false;
+
     const command = `setblock ${location.x} ${location.y} ${location.z} ${blockId} replace`;
     try {
         bot.runCommand(command);
@@ -352,6 +379,11 @@ function getCrystalCandidates(bot, target, state) {
             const key = `${base.x},${base.y},${base.z}`;
             if (used.includes(key)) continue;
 
+            // A real player must be able to reach the block used for the
+            // crystal. This also prevents the command fallback from placing
+            // obsidian beside a target several blocks away.
+            if (!canReachPlacement(bot, base)) continue;
+
             const baseBlock = getBlock(bot.dimension, base.x, base.y, base.z);
             const needsPlace = !isCrystalBase(baseBlock);
             if (needsPlace && !isReplaceable(baseBlock)) continue;
@@ -417,8 +449,34 @@ function finishCrystalCombo(bot, state) {
     resetCrystalState(state, PVP_CONFIG.crystal.cooldownTicks);
 }
 
+function protectBotFromCrystalExplosion(bot) {
+    try {
+        bot.addTag(CRYSTAL_PROTECTION_TAG);
+    } catch (error) {
+        try {
+            bot.runCommand(`tag @s add ${CRYSTAL_PROTECTION_TAG}`);
+        } catch (fallbackError) {}
+    }
+
+    system.runTimeout(() => {
+        try {
+            if (!isValid(bot)) return;
+            bot.removeTag(CRYSTAL_PROTECTION_TAG);
+        } catch (error) {
+            try {
+                if (isValid(bot)) bot.runCommand(`tag @s remove ${CRYSTAL_PROTECTION_TAG}`);
+            } catch (fallbackError) {}
+        }
+    }, CRYSTAL_PROTECTION_TICKS);
+}
+
 function damageCrystal(crystal, bot) {
     if (!isValid(crystal)) return;
+
+    // The tag is consumed by the damage_sensor component on bot:army21. It is
+    // active before the damage call, so the bot ignores this crystal's blast
+    // while players and other mobs still receive normal explosion damage.
+    protectBotFromCrystalExplosion(bot);
 
     let damageSent = false;
     try {
@@ -502,6 +560,11 @@ function placeNextCrystal(bot, state, target) {
                 return;
             }
             if (distance3d(bot.location, target.location) > PVP_CONFIG.crystal.triggerDistance + 3) {
+                finishCrystalCombo(bot, state);
+                return;
+            }
+
+            if (!canReachPlacement(bot, candidate.base)) {
                 finishCrystalCombo(bot, state);
                 return;
             }
