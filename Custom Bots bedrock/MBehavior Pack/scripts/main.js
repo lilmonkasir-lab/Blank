@@ -1213,7 +1213,7 @@ import {
             .toggle("Enable crystal combos", crystal.enabled)
             .slider("Pops per combo", 1, 6, 1, crystal.comboPops)
             .slider("Trigger distance", 4, 16, 1, crystal.triggerDistance)
-            .slider("Minimum self distance", 2, 5, 0.25, crystal.selfDistance)
+            .slider("Minimum self distance", 2, 6.5, 0.25, crystal.selfDistance)
             .slider("Cooldown (ticks)", 20, 240, 5, crystal.cooldownTicks);
 
         form.show(player).then((response) => {

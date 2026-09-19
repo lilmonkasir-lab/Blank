@@ -379,6 +379,16 @@
             }
           },
           "deals_damage": false
+        },
+        {
+          "cause": "block_explosion",
+          "on_damage": {
+            "filters": {
+              "test": "has_tag",
+              "value": "bot_crystal_protected"
+            }
+          },
+          "deals_damage": false
         }
       ],
       "minecraft:behavior.float": {

@@ -21,22 +21,22 @@ export const PVP_CONFIG = {
     placementReach: 5.0,
     crystal: {
         enabled: true,
-        comboPops: 4,
+        comboPops: 3,
         triggerDistance: 10,
-        minimumDistance: 3.25,
+        minimumDistance: 4.0,
         popDelayTicks: 5,
-        gapTicks: 7,
-        cooldownTicks: 70,
-        selfDistance: 3.1,
+        gapTicks: 9,
+        cooldownTicks: 90,
+        selfDistance: 5.5,
         targetMustBeGrounded: true
     },
     bridge: {
         enabled: true,
         block: "minecraft:obsidian",
         checkInterval: 2,
-        maxBlocksPerBridge: 48,
-        targetDistance: 40,
-        clutch: true
+        maxBlocksPerBridge: 24,
+        targetDistance: 32,
+        clutch: false
     },
     combat: {
         enabled: true,
@@ -87,7 +87,7 @@ const crystalStates = new Map();
 const bridgeStates = new Map();
 const combatStates = new Map();
 const CRYSTAL_PROTECTION_TAG = "bot_crystal_protected";
-const CRYSTAL_PROTECTION_TICKS = 8;
+const CRYSTAL_PROTECTION_TICKS = 20;
 
 function isValid(entity) {
     try {
@@ -148,7 +148,9 @@ function getBlock(dimension, x, y, z) {
 }
 
 function isReplaceable(block) {
-    if (!block) return true;
+    // A missing block means the chunk/query is unavailable, not that an air
+    // block was found. Treating it as replaceable causes floating air-places.
+    if (!block) return false;
     try {
         if (block.isAir === true) return true;
     } catch (error) {}
@@ -272,6 +274,11 @@ function runSetBlock(bot, location, blockId) {
     // happens first so this cannot become a long-distance placement exploit.
     if (!canReachPlacement(bot, location)) return false;
 
+    // Never replace a solid block or place into an unloaded/unknown cell.
+    // This is the final guard against repeated floating air placement.
+    const existing = getBlock(bot.dimension, location.x, location.y, location.z);
+    if (!existing || !isReplaceable(existing)) return false;
+
     const command = `setblock ${location.x} ${location.y} ${location.z} ${blockId} replace`;
     try {
         bot.runCommand(command);
@@ -365,7 +372,7 @@ function getCrystalCandidates(bot, target, state) {
         { x: -1, z: -1 }
     ];
     const candidates = [];
-    const used = state.usedBases || [];
+    const candidateKeys = new Set();
 
     for (const direction of directions) {
         if (direction.x === 0 && direction.z === 0) continue;
@@ -377,7 +384,8 @@ function getCrystalCandidates(bot, target, state) {
                 z: targetZ + direction.z
             };
             const key = `${base.x},${base.y},${base.z}`;
-            if (used.includes(key)) continue;
+            if (candidateKeys.has(key)) continue;
+            candidateKeys.add(key);
 
             // A real player must be able to reach the block used for the
             // crystal. This also prevents the command fallback from placing
@@ -457,6 +465,13 @@ function protectBotFromCrystalExplosion(bot) {
             bot.runCommand(`tag @s add ${CRYSTAL_PROTECTION_TAG}`);
         } catch (fallbackError) {}
     }
+
+    // This is a short fallback for Bedrock builds that do not apply the
+    // damage_sensor filter to crystal explosions consistently. It expires on
+    // its own and is refreshed only when this bot is about to pop a crystal.
+    try {
+        bot.runCommand("effect @s resistance 1 5 true");
+    } catch (error) {}
 
     system.runTimeout(() => {
         try {
@@ -538,7 +553,6 @@ function placeNextCrystal(bot, state, target) {
     }
 
     state.phase = "placing";
-    state.usedBases.push(candidate.key);
     state.base = candidate.base;
     state.token += 1;
     const token = state.token;
@@ -699,11 +713,17 @@ function getNextBridgeCell(bot, target) {
     const stepZ = direction.z === 0 ? 0 : (direction.z > 0 ? 1 : -1);
     const feetY = Math.floor(bot.location.y);
 
-    // First put a block under a falling bot.  This is the small clutch that
-    // keeps a bridge from ending because the bot stepped off its last block.
+    // Only use the falling clutch when it is explicitly enabled. This avoids
+    // placing a block under a bot that is simply jumping or walking normally.
     const currentCell = { x: currentX, z: currentZ };
-    if (!isSolid(blockAtCell(bot.dimension, currentCell, feetY - 1))) {
-        return { x: currentX, y: feetY - 1, z: currentZ, direction };
+    const currentSupport = blockAtCell(bot.dimension, currentCell, feetY - 1);
+    if (!currentSupport) return null;
+    if (!isSolid(currentSupport)) {
+        const currentFootBlock = blockAtCell(bot.dimension, currentCell, feetY);
+        if (PVP_CONFIG.bridge.clutch && currentFootBlock && isReplaceable(currentFootBlock)) {
+            return { x: currentX, y: feetY - 1, z: currentZ, direction };
+        }
+        return null;
     }
 
     for (let distance = 1; distance <= 2; distance += 1) {
@@ -713,7 +733,7 @@ function getNextBridgeCell(bot, target) {
         };
         const support = blockAtCell(bot.dimension, cell, feetY - 1);
         const footBlock = blockAtCell(bot.dimension, cell, feetY);
-        if (!isSolid(support) && isReplaceable(footBlock)) {
+        if (support && footBlock && !isSolid(support) && isReplaceable(footBlock)) {
             return { x: cell.x, y: feetY - 1, z: cell.z, direction };
         }
     }
@@ -732,7 +752,22 @@ function stopBridge(bot, state, cooldownTicks = 0) {
     state.lastCell = "";
     state.stalledTicks = 0;
     state.active = false;
+    state.waitingForMovement = false;
+    state.lastBuildPosition = null;
+    state.lastBuildTick = 0;
     state.cooldownUntil = system.currentTick + cooldownTicks;
+}
+
+function nudgeAcrossBridge(bot, target) {
+    faceTarget(bot, target);
+    try {
+        const direction = getDirection(bot.location, target.location);
+        bot.applyImpulse({
+            x: direction.x * 0.035,
+            y: 0.008,
+            z: direction.z * 0.035
+        });
+    } catch (error) {}
 }
 
 function updateBridgeBot(bot, tick) {
@@ -743,6 +778,9 @@ function updateBridgeBot(bot, tick) {
             lastCell: "",
             stalledTicks: 0,
             active: false,
+            waitingForMovement: false,
+            lastBuildPosition: null,
+            lastBuildTick: 0,
             cooldownUntil: 0
         };
         bridgeStates.set(bot.id, state);
@@ -765,6 +803,22 @@ function updateBridgeBot(bot, tick) {
         return;
     }
 
+    // Never queue another block just because the bot has not moved yet. The
+    // old loop filled an entire 48-block runway while the bot was stuck at one
+    // edge. A human places the next block only after stepping forward.
+    if (state.waitingForMovement && state.lastBuildPosition) {
+        const moved = horizontalDistance(bot.location, state.lastBuildPosition);
+        if (moved < 0.65) {
+            if (tick - state.lastBuildTick > 30) {
+                stopBridge(bot, state, 40);
+                return;
+            }
+            nudgeAcrossBridge(bot, target);
+            return;
+        }
+        state.waitingForMovement = false;
+    }
+
     const placement = getNextBridgeCell(bot, target);
     if (!placement) {
         stopBridge(bot, state);
@@ -785,24 +839,23 @@ function updateBridgeBot(bot, tick) {
     }
 
     equipBlock(bot, PVP_CONFIG.bridge.block);
-    if (runSetBlock(bot, placement, PVP_CONFIG.bridge.block)) {
-        state.blocks += 1;
-        state.active = true;
+    if (!runSetBlock(bot, placement, PVP_CONFIG.bridge.block)) {
+        stopBridge(bot, state, 40);
+        return;
     }
 
-    faceTarget(bot, target);
-    try {
-        const direction = placement.direction;
-        bot.applyImpulse({
-            x: direction.x * 0.055,
-            y: 0.018,
-            z: direction.z * 0.055
-        });
-    } catch (error) {}
+    state.blocks += 1;
+    state.active = true;
+    state.waitingForMovement = true;
+    state.lastBuildPosition = { x: bot.location.x, z: bot.location.z };
+    state.lastBuildTick = tick;
+    nudgeAcrossBridge(bot, target);
 }
 
 function updateClutch(bot) {
     if (!PVP_CONFIG.bridge.enabled || !PVP_CONFIG.bridge.clutch) return;
+    const bridgeState = bridgeStates.get(bot.id);
+    if (!bridgeState || !bridgeState.active) return;
     try {
         const velocity = bot.getVelocity();
         if (!velocity || velocity.y > -0.12) return;
