@@ -7,6 +7,7 @@ Custom Bots is a Minecraft Bedrock behavior/resource pack for `bot:army21`. The 
 - **Crystal PvP:** when a target is on the ground and in range, the bot places obsidian beside the target, spawns an end crystal, breaks it with an entity attack so it explodes, and repeats the combo three times by default. Bots are protected from their own crystal blast.
 - **Human-range building:** all obsidian placement is limited to a conservative five-block Bedrock survival reach; the command fallback cannot place blocks from far away.
 - **Bridge building:** the bot detects real gaps between itself and a target, places one obsidian block at a time, waits for its movement before placing the next block, and stops after a configurable bridge length. Random clutch/air placement is off by default.
+- **Mace and wind-charge combat:** at close range the bot equips a mace, jumps, and adds a falling smash hit; at mid-range it launches a real Bedrock wind-charge projectile before closing in.
 - **Combat movement:** the bot aims at its target, advances at range, retreats when too close, and alternates strafing directions instead of standing still.
 - Existing healing, shield, pearl, jump, critical-hit, target-permission, and equipment systems remain enabled.
 
@@ -16,6 +17,7 @@ Give yourself a stick and use it to open **Settings**. The new menus let you tog
 
 - Crystal PvP, number of pops, range, self-distance, and cooldown
 - Bridging, clutch blocks, maximum bridge length, and target distance
+- Mace smash and wind-charge combat
 - Combat movement, strafing, target distance, and strafe timing
 
 The runtime defaults and implementation are in:

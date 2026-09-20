@@ -1185,6 +1185,7 @@ import {
             .button("Pearl")
             .button("Sneak")
             .button("Jump")
+            .button("Mace & Wind Charge")
             .button("Crystal PvP")
             .button("Bridge")
             .button("Combat Movement")
@@ -1198,11 +1199,39 @@ import {
                 case 2: showPearlMenu(player); break;
                 case 3: showSneakMenu(player); break;
                 case 4: showJumpMenu(player); break;
-                case 5: showCrystalPvpMenu(player); break;
-                case 6: showBridgeMenu(player); break;
-                case 7: showCombatMovementMenu(player); break;
-                case 8: showTargetMenu(player); break;
+                case 5: showMaceWindMenu(player); break;
+                case 6: showCrystalPvpMenu(player); break;
+                case 7: showBridgeMenu(player); break;
+                case 8: showCombatMovementMenu(player); break;
+                case 9: showTargetMenu(player); break;
             }
+        });
+    }
+
+    function showMaceWindMenu(player) {
+        const mace = PVP_CONFIG.mace;
+        const wind = PVP_CONFIG.windCharge;
+        const form = new ModalFormData()
+            .title("Mace & Wind Charge")
+            .toggle("Enable mace smash attacks", mace.enabled)
+            .toggle("Enable wind charge attacks", wind.enabled)
+            .slider("Mace cooldown (ticks)", 20, 160, 5, mace.cooldownTicks)
+            .slider("Wind charge cooldown (ticks)", 20, 160, 5, wind.cooldownTicks)
+            .slider("Mace smash bonus damage", 0, 10, 1, mace.smashBonusDamage);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [maceEnabled, windEnabled, maceCooldown, windCooldown, bonusDamage] = response.formValues;
+            mace.enabled = maceEnabled;
+            wind.enabled = windEnabled;
+            mace.cooldownTicks = maceCooldown;
+            wind.cooldownTicks = windCooldown;
+            mace.smashBonusDamage = bonusDamage;
+            player.sendMessage(`§aMace ${maceEnabled ? "enabled" : "disabled"}, wind charge ${windEnabled ? "enabled" : "disabled"}`);
+            showMainMenu(player);
         });
     }
 

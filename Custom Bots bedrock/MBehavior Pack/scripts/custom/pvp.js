@@ -30,6 +30,24 @@ export const PVP_CONFIG = {
         selfDistance: 5.5,
         targetMustBeGrounded: true
     },
+    mace: {
+        enabled: true,
+        minimumDistance: 2.5,
+        maximumDistance: 6.0,
+        cooldownTicks: 55,
+        activeTicks: 24,
+        jumpImpulse: 0.72,
+        forwardImpulse: 0.08,
+        smashBonusDamage: 5
+    },
+    windCharge: {
+        enabled: true,
+        minimumDistance: 6.0,
+        maximumDistance: 14.0,
+        cooldownTicks: 70,
+        activeTicks: 10,
+        power: 1.25
+    },
     bridge: {
         enabled: true,
         block: "minecraft:obsidian",
@@ -84,6 +102,8 @@ const CRYSTAL_BASES = new Set([
 ]);
 
 const crystalStates = new Map();
+const maceStates = new Map();
+const windChargeStates = new Map();
 const bridgeStates = new Map();
 const combatStates = new Map();
 const CRYSTAL_PROTECTION_TAG = "bot_crystal_protected";
@@ -293,12 +313,16 @@ function runSetBlock(bot, location, blockId) {
     }
 }
 
-function equipBlock(bot, blockId) {
+function equipItem(bot, itemId) {
     try {
-        // This is only a visual hand change.  Blocks are placed by the
-        // command above so a bot does not need a full player inventory.
-        bot.runCommand(`replaceitem entity @s slot.weapon.mainhand 0 ${blockId} 1`);
+        bot.runCommand(`replaceitem entity @s slot.weapon.mainhand 0 ${itemId} 1`);
     } catch (error) {}
+}
+
+function equipBlock(bot, blockId) {
+    // This is only a visual hand change. Blocks are placed by the command
+    // above so a bot does not need a full player inventory.
+    equipItem(bot, blockId);
 }
 
 function restoreWeapon(bot) {
@@ -455,6 +479,230 @@ function resetCrystalState(state, cooldown = 0) {
 function finishCrystalCombo(bot, state) {
     restoreWeapon(bot);
     resetCrystalState(state, PVP_CONFIG.crystal.cooldownTicks);
+}
+
+function isCrystalBusy(bot) {
+    const state = crystalStates.get(bot.id);
+    return !!state && (state.phase === "placing" || state.phase === "waiting" || state.phase === "gap");
+}
+
+function isBridgeBusy(bot) {
+    const state = bridgeStates.get(bot.id);
+    return !!state && (state.active || state.waitingForMovement);
+}
+
+function finishMaceAttack(bot, state) {
+    restoreWeapon(bot);
+    state.phase = "cooldown";
+    state.cooldownUntil = system.currentTick + PVP_CONFIG.mace.cooldownTicks;
+    state.targetId = null;
+    state.didSmash = false;
+    state.wasAirborne = false;
+}
+
+function startMaceAttack(bot, target, tick) {
+    const state = maceStates.get(bot.id) || {
+        phase: "idle",
+        cooldownUntil: 0,
+        targetId: null,
+        endTick: 0,
+        canSmashAfterTick: 0,
+        didSmash: false,
+        wasAirborne: false
+    };
+
+    state.phase = "active";
+    state.targetId = target.id;
+    state.endTick = tick + PVP_CONFIG.mace.activeTicks;
+    state.canSmashAfterTick = tick + 5;
+    state.didSmash = false;
+    state.wasAirborne = false;
+    maceStates.set(bot.id, state);
+
+    equipItem(bot, "minecraft:mace");
+    faceTarget(bot, target);
+    try {
+        const direction = getDirection(bot.location, target.location);
+        bot.applyImpulse({
+            x: direction.x * PVP_CONFIG.mace.forwardImpulse,
+            y: PVP_CONFIG.mace.jumpImpulse,
+            z: direction.z * PVP_CONFIG.mace.forwardImpulse
+        });
+    } catch (error) {}
+}
+
+function updateMaceBot(bot, tick) {
+    if (!PVP_CONFIG.mace.enabled || isIgnoredBot(bot)) {
+        const state = maceStates.get(bot.id);
+        if (state && state.phase === "active") finishMaceAttack(bot, state);
+        return;
+    }
+
+    let state = maceStates.get(bot.id);
+    if (!state) {
+        state = {
+            phase: "idle",
+            cooldownUntil: 0,
+            targetId: null,
+            endTick: 0,
+            canSmashAfterTick: 0,
+            didSmash: false,
+            wasAirborne: false
+        };
+        maceStates.set(bot.id, state);
+    }
+
+    if (state.phase === "cooldown") {
+        if (tick >= state.cooldownUntil) state.phase = "idle";
+        else return;
+    }
+
+    if (state.phase === "active") {
+        const target = getEntityById(state.targetId);
+        if (target && isValid(target) && !isIgnoredTarget(target)) faceTarget(bot, target);
+        if (bot.isOnGround === false) state.wasAirborne = true;
+        if (tick >= state.endTick || state.didSmash) finishMaceAttack(bot, state);
+        return;
+    }
+
+    if (isCrystalBusy(bot) || isBridgeBusy(bot) || windChargeStates.get(bot.id)?.phase === "active") return;
+    if (bot.isOnGround === false) return;
+
+    const target = getNearestTarget(bot, PVP_CONFIG.mace.maximumDistance);
+    if (!target) return;
+    const distance = horizontalDistance(bot.location, target.location);
+    if (distance < PVP_CONFIG.mace.minimumDistance ||
+        distance > PVP_CONFIG.mace.maximumDistance) return;
+
+    startMaceAttack(bot, target, tick);
+}
+
+function getWindChargeAt(dimension, location, radius = 2.5) {
+    try {
+        const projectiles = dimension.getEntities({
+            type: "minecraft:wind_charge_projectile",
+            location,
+            maxDistance: radius
+        });
+        let nearest = null;
+        let nearestDistance = radius;
+        for (const projectile of projectiles) {
+            const currentDistance = distance3d(location, projectile.location);
+            if (currentDistance < nearestDistance) {
+                nearest = projectile;
+                nearestDistance = currentDistance;
+            }
+        }
+        return nearest;
+    } catch (error) {
+        return null;
+    }
+}
+
+function spawnWindCharge(dimension, location) {
+    let projectile = null;
+    try {
+        projectile = dimension.spawnEntity("minecraft:wind_charge_projectile", location);
+    } catch (error) {}
+
+    if (!projectile) {
+        try {
+            dimension.runCommand(`summon wind_charge_projectile ${location.x} ${location.y} ${location.z}`);
+        } catch (error) {}
+        projectile = getWindChargeAt(dimension, location);
+    }
+    return projectile;
+}
+
+function finishWindCharge(bot, state) {
+    restoreWeapon(bot);
+    state.phase = "cooldown";
+    state.cooldownUntil = system.currentTick + PVP_CONFIG.windCharge.cooldownTicks;
+    state.targetId = null;
+}
+
+function startWindCharge(bot, target, tick) {
+    const state = windChargeStates.get(bot.id) || {
+        phase: "idle",
+        cooldownUntil: 0,
+        targetId: null,
+        endTick: 0
+    };
+    state.phase = "active";
+    state.cooldownUntil = 0;
+    state.targetId = target.id;
+    state.endTick = tick + PVP_CONFIG.windCharge.activeTicks;
+    windChargeStates.set(bot.id, state);
+
+    equipItem(bot, "minecraft:wind_charge");
+    const direction = getDirection(bot.location, target.location);
+    const start = {
+        x: bot.location.x + direction.x * 0.8,
+        y: bot.location.y + 1.35,
+        z: bot.location.z + direction.z * 0.8
+    };
+    const targetPoint = {
+        x: target.location.x,
+        y: target.location.y + 1.0,
+        z: target.location.z
+    };
+    const dx = targetPoint.x - start.x;
+    const dy = targetPoint.y - start.y;
+    const dz = targetPoint.z - start.z;
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    const flight = { x: dx / length, y: dy / length, z: dz / length };
+
+    const projectile = spawnWindCharge(bot.dimension, start);
+    if (!projectile) {
+        finishWindCharge(bot, state);
+        return;
+    }
+
+    try {
+        const yaw = Math.atan2(-flight.x, flight.z) * (180 / Math.PI);
+        const pitch = -Math.atan2(flight.y, Math.sqrt(flight.x * flight.x + flight.z * flight.z)) * (180 / Math.PI);
+        projectile.setRotation({ x: pitch, y: yaw });
+        projectile.applyImpulse({
+            x: flight.x * PVP_CONFIG.windCharge.power,
+            y: flight.y * PVP_CONFIG.windCharge.power,
+            z: flight.z * PVP_CONFIG.windCharge.power
+        });
+    } catch (error) {}
+}
+
+function updateWindChargeBot(bot, tick) {
+    if (!PVP_CONFIG.windCharge.enabled || isIgnoredBot(bot)) {
+        const activeState = windChargeStates.get(bot.id);
+        if (activeState && activeState.phase === "active") finishWindCharge(bot, activeState);
+        return;
+    }
+
+    let state = windChargeStates.get(bot.id);
+    if (!state) {
+        state = { phase: "idle", cooldownUntil: 0, targetId: null, endTick: 0 };
+        windChargeStates.set(bot.id, state);
+    }
+
+    if (state.phase === "cooldown") {
+        if (tick >= state.cooldownUntil) state.phase = "idle";
+        else return;
+    }
+    if (state.phase === "active") {
+        const target = getEntityById(state.targetId);
+        if (target && isValid(target) && !isIgnoredTarget(target)) faceTarget(bot, target);
+        if (tick >= state.endTick) finishWindCharge(bot, state);
+        return;
+    }
+
+    if (isCrystalBusy(bot) || isBridgeBusy(bot) || maceStates.get(bot.id)?.phase === "active") return;
+
+    const target = getNearestTarget(bot, PVP_CONFIG.windCharge.maximumDistance);
+    if (!target || !isGrounded(target)) return;
+    const distance = horizontalDistance(bot.location, target.location);
+    if (distance < PVP_CONFIG.windCharge.minimumDistance ||
+        distance > PVP_CONFIG.windCharge.maximumDistance) return;
+
+    startWindCharge(bot, target, tick);
 }
 
 function protectBotFromCrystalExplosion(bot) {
@@ -911,6 +1159,31 @@ function updateCombatBot(bot, tick) {
     } catch (error) {}
 }
 
+world.afterEvents.entityHitEntity.subscribe(event => {
+    const attacker = event.damagingEntity;
+    const victim = event.hitEntity;
+    if (!attacker || !victim) return;
+
+    const state = maceStates.get(attacker.id);
+    if (!state || state.phase !== "active" || state.didSmash) return;
+    if (state.targetId !== victim.id || system.currentTick < state.canSmashAfterTick) return;
+
+    let descending = false;
+    try {
+        const velocity = attacker.getVelocity();
+        descending = !!velocity && velocity.y < -0.05;
+    } catch (error) {}
+    if (!descending && !state.wasAirborne) return;
+
+    try {
+        victim.applyDamage(PVP_CONFIG.mace.smashBonusDamage, {
+            cause: "entityAttack",
+            damagingEntity: attacker
+        });
+        state.didSmash = true;
+    } catch (error) {}
+});
+
 function cleanupStates() {
     const activeIds = new Set();
     for (const dimensionId of DIMENSION_IDS) {
@@ -922,6 +1195,12 @@ function cleanupStates() {
 
     for (const id of crystalStates.keys()) {
         if (!activeIds.has(id)) crystalStates.delete(id);
+    }
+    for (const id of maceStates.keys()) {
+        if (!activeIds.has(id)) maceStates.delete(id);
+    }
+    for (const id of windChargeStates.keys()) {
+        if (!activeIds.has(id)) windChargeStates.delete(id);
     }
     for (const id of bridgeStates.keys()) {
         if (!activeIds.has(id)) bridgeStates.delete(id);
@@ -940,6 +1219,8 @@ system.runInterval(() => {
                 updateCrystalBot(bot, system.currentTick);
                 updateBridgeBot(bot, system.currentTick);
                 updateClutch(bot);
+                updateMaceBot(bot, system.currentTick);
+                updateWindChargeBot(bot, system.currentTick);
                 updateCombatBot(bot, system.currentTick);
             }
         } catch (error) {}
@@ -952,12 +1233,16 @@ try {
     world.afterEvents.entityDie.subscribe(event => {
         const id = event.deadEntity.id;
         crystalStates.delete(id);
+        maceStates.delete(id);
+        windChargeStates.delete(id);
         bridgeStates.delete(id);
         combatStates.delete(id);
     });
     world.afterEvents.entityRemove.subscribe(event => {
         const id = event.removedEntityId;
         crystalStates.delete(id);
+        maceStates.delete(id);
+        windChargeStates.delete(id);
         bridgeStates.delete(id);
         combatStates.delete(id);
     });
