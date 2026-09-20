@@ -493,43 +493,56 @@ function getBlock(dimension, location) {
 }
 
 function placeBed(game, team) {
-    const location = {
-        x: Math.floor(team.spawn.x),
+    // A Bedrock bed is a two-block structure. Put the foot beside the spawn
+    // point and explicitly place both permutations so it is a real bed that
+    // can be broken and detected, not just a decorative single block.
+    const foot = {
+        x: Math.floor(team.spawn.x) + 1,
         y: Math.floor(team.spawn.y),
         z: Math.floor(team.spawn.z)
     };
-    const block = getBlock(game.dimension, location);
-    if (block && (block.typeId === "minecraft:air" || block.isAir === true)) {
-        const command = `setblock ${location.x} ${location.y} ${location.z} minecraft:bed`;
-        try {
-            game.dimension.runCommand(command);
-            team.bed = { x: location.x, y: location.y, z: location.z, active: true };
-            return true;
-        } catch (error) {
-            try {
-                game.dimension.runCommand(`setblock ${location.x} ${location.y} ${location.z} bed`);
-                team.bed = { x: location.x, y: location.y, z: location.z, active: true };
-                return true;
-            } catch (fallbackError) {}
-        }
+    const head = { x: foot.x + 1, y: foot.y, z: foot.z };
+    const footBlock = getBlock(game.dimension, foot);
+    const headBlock = getBlock(game.dimension, head);
+    const isAir = block => !!block && (block.typeId === "minecraft:air" || block.isAir === true);
+    if (!isAir(footBlock) || !isAir(headBlock)) {
+        team.bed = { ...foot, head, active: false };
+        return false;
     }
-    team.bed = { x: location.x, y: location.y, z: location.z, active: false };
-    return false;
+
+    const footCommand = `setblock ${foot.x} ${foot.y} ${foot.z} minecraft:bed ["direction":3,"head_piece_bit":false] replace`;
+    const headCommand = `setblock ${head.x} ${head.y} ${head.z} minecraft:bed ["direction":3,"head_piece_bit":true] replace`;
+    let placed = runMapCommand(game, footCommand) && runMapCommand(game, headCommand);
+    if (!placed) {
+        // Older Bedrock command parsers accept the block name but not the
+        // explicit state array. Try the legacy form once before giving up.
+        placed = runMapCommand(game, `setblock ${foot.x} ${foot.y} ${foot.z} bed replace`) &&
+            runMapCommand(game, `setblock ${head.x} ${head.y} ${head.z} bed replace`);
+    }
+    const actualFoot = getBlock(game.dimension, foot);
+    const actualHead = getBlock(game.dimension, head);
+    const validBed = placed && actualFoot && actualHead &&
+        actualFoot.typeId.endsWith(":bed") && actualHead.typeId.endsWith(":bed");
+    team.bed = { ...foot, head, active: !!validBed };
+    return !!validBed;
 }
 
 function isBedPresent(game, bed) {
-    if (!bed || !bed.active) return false;
-    const block = getBlock(game.dimension, bed);
-    return !!block && (block.typeId === "minecraft:bed" || block.typeId.endsWith(":bed"));
+    if (!bed || !bed.active || !bed.head) return false;
+    const footBlock = getBlock(game.dimension, bed);
+    const headBlock = getBlock(game.dimension, bed.head);
+    return !!footBlock && !!headBlock && footBlock.typeId.endsWith(":bed") && headBlock.typeId.endsWith(":bed");
 }
 
 function removeBed(game, bed) {
     if (!bed) return;
-    const block = getBlock(game.dimension, bed);
-    if (block && (block.typeId === "minecraft:bed" || block.typeId.endsWith(":bed"))) {
-        try {
-            game.dimension.runCommand(`setblock ${bed.x} ${bed.y} ${bed.z} air`);
-        } catch (error) {}
+    const footBlock = getBlock(game.dimension, bed);
+    const headBlock = bed.head ? getBlock(game.dimension, bed.head) : null;
+    if (footBlock && footBlock.typeId.endsWith(":bed")) {
+        runMapCommand(game, `setblock ${bed.x} ${bed.y} ${bed.z} air replace`);
+    }
+    if (headBlock && headBlock.typeId.endsWith(":bed")) {
+        runMapCommand(game, `setblock ${bed.head.x} ${bed.head.y} ${bed.head.z} air replace`);
     }
 }
 
@@ -728,8 +741,10 @@ function startGame(host, mode, botCount, giveKits = true, mapId = "") {
     }
 
     if (mode === "bedwars") {
-        for (const team of game.teams) {
-            placeBed(game, team);
+        const bedsPlaced = game.teams.every(team => placeBed(game, team));
+        if (!bedsPlaced) {
+            endGame(game, "§cBedWars could not place every bed in this area. Try starting again in a clear location.");
+            return;
         }
     }
 

@@ -4,7 +4,7 @@
     "description": "Custom Bots - Resources for Bedrock Edition",
     "name": "Custom Bots [RP]",
     "uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    "version": [1, 5, 0],
+    "version": [1, 6, 0],
     "min_engine_version": [1, 21, 0]
   },
   "modules": [
@@ -12,13 +12,13 @@
       "description": "Custom Bots - Resources",
       "type": "resources",
       "uuid": "6b8b4567-9cde-4f8a-b7e6-8f2d4c3e5a7b",
-      "version": [1, 5, 0]
+      "version": [1, 6, 0]
     }
   ],
   "dependencies": [
     {
       "uuid": "8c9e7f6d-5b4a-3c2d-1e0f-9a8b7c6d5e4f",
-      "version": [1, 5, 0]
+      "version": [1, 6, 0]
     }
   ],
   "metadata": {
