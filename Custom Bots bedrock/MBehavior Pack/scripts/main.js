@@ -8,40 +8,12 @@ import "./custom/names";
 import "./custom/death";
 import "./custom/spread";
 import "./custom/script1";
-
-const TARGET_CONFIG = {
-    botTargets: new Map(),
-    allowedTargets: new Set(),
-    targetingMode: "all"
-};
-
-function getBotTarget(botId) {
-    return TARGET_CONFIG.botTargets.get(botId) || null;
-}
-
-function setBotTarget(botId, playerName) {
-    if (playerName) {
-        TARGET_CONFIG.botTargets.set(botId, playerName);
-        TARGET_CONFIG.allowedTargets.add(playerName);
-        TARGET_CONFIG.targetingMode = "specific";
-    } else {
-        TARGET_CONFIG.botTargets.delete(botId);
-    }
-}
-
-function isPlayerAllowedTarget(playerName) {
-    if (TARGET_CONFIG.targetingMode === "all") return true;
-    return TARGET_CONFIG.allowedTargets.has(playerName);
-}
-
-function getTargetPlayerNames() {
-    const players = world.getPlayers();
-    return players.map(p => p.name);
-}
-
-function getOnlinePlayerNames() {
-    return world.getPlayers().map(p => p.name);
-}
+import { PVP_CONFIG } from "./custom/pvp";
+import {
+    TARGET_CONFIG,
+    isPlayerAllowedTarget,
+    getOnlinePlayerNames
+} from "./custom/targeting";
 
 (function() {
     const HEAL_BOTS = [
@@ -359,7 +331,7 @@ function getOnlinePlayerNames() {
 (function() {
     const PEARL_CONFIG = {
         enabled: true,
-        BOTS: [],
+        BOTS: ["bot:army21"],
         PEARL_CHANCE: {
             "bot:army21": {
                 "default": 0.1,
@@ -603,7 +575,44 @@ function getOnlinePlayerNames() {
         return botType.replace("bot:", "");
     }
 
-    function executePearlSequence(bot) {
+    function aimPearlAtPredictedTarget(bot, target) {
+        try {
+            if (!PVP_CONFIG.mechanics.enabled || !PVP_CONFIG.mechanics.predictedProjectiles ||
+                !target || !target.isValid()) return;
+            const velocity = target.getVelocity() || { x: 0, y: 0, z: 0 };
+            const dx = target.location.x - bot.location.x;
+            const dy = target.location.y - bot.location.y;
+            const dz = target.location.z - bot.location.z;
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const travelTicks = Math.max(1, Math.min(8, distance / 1.5));
+            const point = {
+                x: target.location.x + velocity.x * travelTicks,
+                y: target.location.y + 1.0 + velocity.y * travelTicks,
+                z: target.location.z + velocity.z * travelTicks
+            };
+            const aimX = point.x - bot.location.x;
+            const aimY = point.y - (bot.location.y + 1.4);
+            const aimZ = point.z - bot.location.z;
+            const horizontal = Math.sqrt(aimX * aimX + aimZ * aimZ) || 0.001;
+            bot.setRotation({
+                x: -Math.atan2(aimY, horizontal) * (180 / Math.PI),
+                y: Math.atan2(-aimX, aimZ) * (180 / Math.PI)
+            });
+        } catch (error) {}
+    }
+
+    function setPearlActionActive(bot, active) {
+        try {
+            if (active) bot.addTag("pvp_pearl_active");
+            else bot.removeTag("pvp_pearl_active");
+        } catch (error) {
+            try {
+                bot.runCommand(`tag @s ${active ? "add" : "remove"} pvp_pearl_active`);
+            } catch (fallbackError) {}
+        }
+    }
+
+    function executePearlSequence(bot, target) {
         const entityId = bot.id;
         const namespace = getEventNamespace(bot.typeId);
         const level = getBotLevel(bot);
@@ -611,8 +620,12 @@ function getOnlinePlayerNames() {
         if (pearlExecutionMap.has(entityId)) {
             return;
         }
+        try {
+            if (bot.hasTag("pvp_special_active")) return;
+        } catch (error) {}
     
         pearlExecutionMap.set(entityId, true);
+        setPearlActionActive(bot, true);
     
         try {
             bot.runCommand(`replaceitem entity @s slot.weapon.mainhand 0 minecraft:ender_pearl`);
@@ -620,6 +633,7 @@ function getOnlinePlayerNames() {
             system.runTimeout(() => {
                 try {
                     if (bot.isValid()) {
+                        aimPearlAtPredictedTarget(bot, target);
                         bot.runCommand(`event entity @s ${namespace}:throw_ender_pearl`);
                     }
                 } catch (e) {}
@@ -636,14 +650,14 @@ function getOnlinePlayerNames() {
                             bot.runCommand(`function sword1`);
                         }
                     }
-                } catch (e) {}
-            
-                system.runTimeout(() => {
+                } catch (e) {} finally {
+                    setPearlActionActive(bot, false);
                     pearlExecutionMap.delete(entityId);
-                }, 2);
+                }
             }, 10);
         
         } catch (e) {
+            setPearlActionActive(bot, false);
             pearlExecutionMap.delete(entityId);
         }
     }
@@ -696,7 +710,7 @@ function getOnlinePlayerNames() {
                         const chance = getPearlChance(botType, level);
 
                         if (Math.random() < chance) {
-                            executePearlSequence(entity);
+                            executePearlSequence(entity, enemy);
                             setPearlCooldown(entity.id, botType, level, tick);
                         }
 
@@ -1213,6 +1227,11 @@ function getOnlinePlayerNames() {
             .button("Pearl")
             .button("Sneak")
             .button("Jump")
+            .button("Mace & Wind Charge")
+            .button("Crystal PvP")
+            .button("Bridge")
+            .button("Combat Movement")
+            .button("Advanced Combat")
             .button("Target Permission");
 
         form.show(player).then((response) => {
@@ -1223,8 +1242,149 @@ function getOnlinePlayerNames() {
                 case 2: showPearlMenu(player); break;
                 case 3: showSneakMenu(player); break;
                 case 4: showJumpMenu(player); break;
-                case 5: showTargetMenu(player); break;
+                case 5: showMaceWindMenu(player); break;
+                case 6: showCrystalPvpMenu(player); break;
+                case 7: showBridgeMenu(player); break;
+                case 8: showCombatMovementMenu(player); break;
+                case 9: showAdvancedCombatMenu(player); break;
+                case 10: showTargetMenu(player); break;
             }
+        });
+    }
+
+    function showMaceWindMenu(player) {
+        const mace = PVP_CONFIG.mace;
+        const wind = PVP_CONFIG.windCharge;
+        const form = new ModalFormData()
+            .title("Mace & Wind Charge")
+            .toggle("Enable mace smash attacks", mace.enabled)
+            .toggle("Enable wind charge attacks", wind.enabled)
+            .slider("Mace cooldown (ticks)", 20, 160, 5, mace.cooldownTicks)
+            .slider("Wind charge cooldown (ticks)", 20, 160, 5, wind.cooldownTicks)
+            .slider("Mace smash bonus damage", 0, 10, 1, mace.smashBonusDamage);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [maceEnabled, windEnabled, maceCooldown, windCooldown, bonusDamage] = response.formValues;
+            mace.enabled = maceEnabled;
+            wind.enabled = windEnabled;
+            mace.cooldownTicks = maceCooldown;
+            wind.cooldownTicks = windCooldown;
+            mace.smashBonusDamage = bonusDamage;
+            player.sendMessage(`§aMace ${maceEnabled ? "enabled" : "disabled"}, wind charge ${windEnabled ? "enabled" : "disabled"}`);
+            showMainMenu(player);
+        });
+    }
+
+    function showCrystalPvpMenu(player) {
+        const crystal = PVP_CONFIG.crystal;
+        const form = new ModalFormData()
+            .title("Crystal PvP")
+            .toggle("Enable crystal combos", crystal.enabled)
+            .slider("Pops per combo", 1, 6, 1, crystal.comboPops)
+            .slider("Trigger distance", 4, 16, 1, crystal.triggerDistance)
+            .slider("Minimum self distance", 2, 6.5, 0.25, crystal.selfDistance)
+            .slider("Cooldown (ticks)", 20, 240, 5, crystal.cooldownTicks);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [enabled, pops, distance, selfDistance, cooldown] = response.formValues;
+            crystal.enabled = enabled;
+            crystal.comboPops = Math.max(1, Math.floor(pops));
+            crystal.triggerDistance = distance;
+            crystal.selfDistance = selfDistance;
+            crystal.cooldownTicks = cooldown;
+            player.sendMessage(`§aCrystal PvP ${enabled ? "enabled" : "disabled"} (${crystal.comboPops} pops per combo)`);
+            showMainMenu(player);
+        });
+    }
+
+    function showBridgeMenu(player) {
+        const bridge = PVP_CONFIG.bridge;
+        const form = new ModalFormData()
+            .title("Bridge Settings")
+            .toggle("Enable bridging", bridge.enabled)
+            .toggle("Place a clutch block while falling", bridge.clutch)
+            .slider("Maximum blocks per bridge", 8, 96, 8, bridge.maxBlocksPerBridge)
+            .slider("Target distance", 16, 80, 4, bridge.targetDistance);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [enabled, clutch, maxBlocks, targetDistance] = response.formValues;
+            bridge.enabled = enabled;
+            bridge.clutch = clutch;
+            bridge.maxBlocksPerBridge = Math.max(8, Math.floor(maxBlocks));
+            bridge.targetDistance = targetDistance;
+            player.sendMessage(`§aBridging ${enabled ? "enabled" : "disabled"}`);
+            showMainMenu(player);
+        });
+    }
+
+    function showCombatMovementMenu(player) {
+        const combat = PVP_CONFIG.combat;
+        const form = new ModalFormData()
+            .title("Combat Movement")
+            .toggle("Enable PvP movement", combat.enabled)
+            .toggle("Strafe around targets", combat.strafe)
+            .slider("Target distance", 8, 40, 2, combat.targetDistance)
+            .slider("Switch strafe side (ticks)", 8, 80, 4, combat.strafeSwitchTicks);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [enabled, strafe, targetDistance, switchTicks] = response.formValues;
+            combat.enabled = enabled;
+            combat.strafe = strafe;
+            combat.targetDistance = targetDistance;
+            combat.strafeSwitchTicks = switchTicks;
+            player.sendMessage(`§aPvP movement ${enabled ? "enabled" : "disabled"}`);
+            showMainMenu(player);
+        });
+    }
+
+    function showAdvancedCombatMenu(player) {
+        const mechanics = PVP_CONFIG.mechanics;
+        const axe = PVP_CONFIG.axe;
+        const rod = PVP_CONFIG.rod;
+        const trap = PVP_CONFIG.trap;
+        const form = new ModalFormData()
+            .title("Advanced Combat")
+            .toggle("Enable advanced timing", mechanics.enabled)
+            .toggle("Sprint reset after sword hits", mechanics.sprintReset)
+            .toggle("Hit-select delay and counter", mechanics.hitSelect)
+            .toggle("Jump reset after damage", mechanics.jumpReset)
+            .toggle("Lead Wind Charge/projectiles", mechanics.predictedProjectiles)
+            .toggle("Axe shield disable", axe.enabled)
+            .toggle("Rod utility at four to five blocks", rod.enabled)
+            .toggle("Reachable low-health traps", trap.enabled);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [enabled, sprintReset, hitSelect, jumpReset, predictedProjectiles, axeEnabled, rodEnabled, trapEnabled] = response.formValues;
+            mechanics.enabled = enabled;
+            mechanics.sprintReset = sprintReset;
+            mechanics.hitSelect = hitSelect;
+            mechanics.jumpReset = jumpReset;
+            mechanics.predictedProjectiles = predictedProjectiles;
+            axe.enabled = axeEnabled;
+            rod.enabled = rodEnabled;
+            trap.enabled = trapEnabled;
+            player.sendMessage(`§aAdvanced combat ${enabled ? "enabled" : "disabled"}`);
+            showMainMenu(player);
         });
     }
 
