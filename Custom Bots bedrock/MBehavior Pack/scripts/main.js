@@ -9,6 +9,7 @@ import "./custom/death";
 import "./custom/spread";
 import "./custom/script1";
 import { PVP_CONFIG } from "./custom/pvp";
+import { showMiniGamesMenu } from "./custom/minigames";
 import {
     TARGET_CONFIG,
     isPlayerAllowedTarget,
@@ -1232,6 +1233,7 @@ import {
             .button("Bridge")
             .button("Combat Movement")
             .button("Advanced Combat")
+            .button("Mini Games & Party")
             .button("Target Permission");
 
         form.show(player).then((response) => {
@@ -1247,7 +1249,8 @@ import {
                 case 7: showBridgeMenu(player); break;
                 case 8: showCombatMovementMenu(player); break;
                 case 9: showAdvancedCombatMenu(player); break;
-                case 10: showTargetMenu(player); break;
+                case 10: showMiniGamesMenu(player); break;
+                case 11: showTargetMenu(player); break;
             }
         });
     }

@@ -24,12 +24,15 @@ Give yourself a stick and use it to open **Settings**. The new menus let you tog
 - Mace smash and wind-charge combat
 - Combat movement, strafing, target distance, and strafe timing
 - Advanced combat timing, sprint/jump reset behavior, projectile leading, axe shield disable, rod utility, and reachable traps
+- **Mini Games & Party:** the Settings stick now opens a party menu with four-digit party codes, invitations, and lobby membership. The host can start FFA, Team Battle (real players versus bots), or BedWars Lite with configurable bots, starter kits, team beds, and respawns while beds survive.
 
 The runtime defaults and implementation are in:
 
 `Custom Bots bedrock/MBehavior Pack/scripts/custom/pvp.js`
 
 The behavior pack must be loaded with the resource pack. The packs use the existing `@minecraft/server` 1.9.0 and `@minecraft/server-ui` 1.3.0 dependencies.
+
+Mini-games are lightweight Bedrock scripting modes rather than a hosted server network: parties are stored in memory and use a four-digit code, games start around the host's current location, and a world reload clears the party list. BedWars is intentionally a compact mode, so players should use a clear area and the match cleans up the beds it created when it ends.
 
 ## Importing the add-on
 

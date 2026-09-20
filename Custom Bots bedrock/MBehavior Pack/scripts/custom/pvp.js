@@ -195,9 +195,28 @@ function isIgnoredTarget(player) {
     return !isValid(player) ||
         player.typeId !== "minecraft:player" ||
         isCreativePlayer(player) ||
-        !isPlayerAllowedTarget(player.name) ||
+        (!isPlayerAllowedTarget(player.name) && !hasTag(player, "minigame_player")) ||
         hasTag(player, "pvp_ignore") ||
         hasTag(player, "bot_ignore");
+}
+
+function getMiniGameTeamTag(entity) {
+    try {
+        const tags = entity.getTags();
+        return tags.find(tag => tag.startsWith("minigame_team_")) || null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function isMiniGameTargetAllowed(bot, player) {
+    if (!hasTag(bot, "minigame_active")) return true;
+    // A mini-game bot should not wander out of the temporary match and attack
+    // unrelated players elsewhere in the world.
+    if (!hasTag(player, "minigame_player")) return false;
+    const botTeamTag = getMiniGameTeamTag(bot);
+    if (botTeamTag && hasTag(player, botTeamTag)) return false;
+    return true;
 }
 
 function distance3d(a, b) {
@@ -275,7 +294,7 @@ function getNearestTarget(bot, maxDistance) {
         });
 
         for (const player of players) {
-            if (isIgnoredTarget(player)) continue;
+            if (isIgnoredTarget(player) || !isMiniGameTargetAllowed(bot, player)) continue;
             const currentDistance = distance3d(bot.location, player.location);
             if (currentDistance < nearestDistance) {
                 nearest = player;
