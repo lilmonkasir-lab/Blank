@@ -796,7 +796,8 @@ function showJoinPartyMenu(player) {
             showMiniGamesMenu(player);
             return;
         }
-        if (joinParty(player, response.formValues[0])) showMiniGamesMenu(player);
+        joinParty(player, response.formValues[0]);
+        showMiniGamesMenu(player);
     }).catch(() => {});
 }
 
