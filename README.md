@@ -1,6 +1,6 @@
 # Custom Bots Bedrock
 
-Custom Bots is a Minecraft Bedrock behavior/resource pack for `bot:army21`. The bot keeps its normal entity AI and now has an additional PvP brain.
+Custom Bots is a Minecraft Bedrock behavior/resource pack for `bot:army21`. The bot keeps its normal entity AI and now has an additional PvP brain. Bots use a 40-health pool so they do not disappear after only a few hits.
 
 ## PvP features
 
@@ -25,7 +25,7 @@ Give yourself a stick and use it to open **Settings**. The new menus let you tog
 - Combat movement, strafing, target distance, and strafe timing
 - Advanced combat timing, sprint/jump reset behavior, projectile leading, axe shield disable, rod utility, and reachable traps
 - **Mini Games & Party:** the Settings stick now opens a party menu with four-digit party codes, invitations, and lobby membership. The host can start FFA, Team Battle (real players versus bots), or BedWars Lite with configurable bots, starter kits, team beds, and respawns while beds survive.
-- **BedWars maps and economy:** BedWars offers a party-wide vote over Skyline, Canyon, Ruins, and Factory. Each map is a separate packaged Bedrock `.mcstructure` under `MBehavior Pack/structures/bedwars/`, loaded by its namespaced structure ID at a fresh coordinate rather than drawn as the old generic sandstone fill. The loader keeps the arena chunks ticking, verifies a representative marker and every team spawn/bed footprint, and only then teleports players; a command fallback is used only for older worlds missing the structures, and a failed verification aborts safely. Players receive timed iron, gold, diamond, and emerald resources and can open **Shop & Upgrades** to buy wool, stone, end stone, weapons, armor, golden apples, Sharpness, Protection, Haste, and Forge team upgrades.
+- **BedWars maps and economy:** BedWars offers a party-wide vote over Skyline, Canyon, Ruins, and Factory. Each map is a separate, valid Bedrock `.mcstructure` under `MBehavior Pack/structures/bedwars/`, using Bedrock's documented ZYX block-index order and loaded by its namespaced structure ID. Arenas are placed roughly 256–430 blocks away from the host, with a ticking area keeping the distant chunks loaded. The loader verifies a representative marker and every team spawn/bed footprint before teleporting anyone; a failed verification aborts safely instead of using a misleading void arena. A temporary invisible barrier floor and perimeter stop players falling onto the flat world, and only touching the dedicated floor barrier is lethal. Players receive timed iron, gold, diamond, and emerald resources and can open **Shop & Upgrades** to buy wool, stone, end stone, weapons, armor, golden apples, Sharpness, Protection, Haste, and Forge team upgrades. Winning players and teammates receive a green **Victory** title, team-color winner text, and fireworks at their return locations.
 
 The runtime defaults and implementation are in:
 

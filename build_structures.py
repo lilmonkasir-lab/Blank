@@ -201,9 +201,13 @@ def make_structure(theme: dict[str, object]) -> bytes:
             palette_names.append(name)
     palette_index = {name: index for index, name in enumerate(palette_names)}
     primary: list[int] = []
-    for y in range(SIZE_Y):
-        for z in range(SIZE_Z):
-            for x in range(SIZE_X):
+    # Bedrock flattens positions in ZYX order: X is the outer dimension,
+    # followed by Y, then Z.  This is easy to get wrong when generating files;
+    # using the documented order is what makes the loaded islands line up with
+    # the JavaScript coordinates used for spawns and beds.
+    for x in range(SIZE_X):
+        for y in range(SIZE_Y):
+            for z in range(SIZE_Z):
                 primary.append(palette_index.get(blocks.get((x, y, z), "minecraft:air"), 0))
     secondary = [-1] * len(primary)
 

@@ -66,9 +66,12 @@ const BEDWARS_MAPS = [
         structureMarker: "minecraft:light_gray_concrete"
     }
 ];
+// Keep the arena well away from the player's flat-world build and camera.
+// The structure loader/ticking area handles the unloaded chunks at these
+// coordinates before anyone is teleported.
 const MAP_ORIGIN_OFFSETS = [
-    { x: 64, z: 0 }, { x: -64, z: 0 }, { x: 0, z: 64 }, { x: 0, z: -64 },
-    { x: 96, z: 48 }, { x: -96, z: -48 }, { x: 48, z: -96 }, { x: -48, z: 96 }
+    { x: 256, z: 0 }, { x: -256, z: 0 }, { x: 0, z: 256 }, { x: 0, z: -256 },
+    { x: 384, z: 192 }, { x: -384, z: -192 }, { x: 192, z: -384 }, { x: -192, z: 384 }
 ];
 
 const parties = new Map();
@@ -457,6 +460,8 @@ function buildMap(game) {
     const baseY = Math.floor(game.mapOrigin.y);
     const allOffsets = map.islandOffsets || [];
     const radius = 27;
+    game.barrierFloorY = baseY - 12;
+    game.barrierBuilt = false;
     game.generatedRegion = {
         minX: Math.floor(game.mapOrigin.x) - radius,
         maxX: Math.floor(game.mapOrigin.x) + radius,
@@ -505,15 +510,50 @@ function buildMap(game) {
     const centerZ = Math.floor(game.mapOrigin.z);
     runMapCommand(game, `setblock ${centerX} ${baseY + 1} ${centerZ} minecraft:emerald_block replace`);
     runMapCommand(game, `setblock ${centerX + 2} ${baseY + 1} ${centerZ} minecraft:diamond_block replace`);
+    if (built) built = buildArenaBarriers(game, baseY);
     game.mapName = map.name;
     game.mapBuilt = built;
     return built;
+}
+
+function buildArenaBarriers(game, baseY) {
+    const region = game.generatedRegion;
+    const floorY = game.barrierFloorY;
+    if (!region || floorY === null || floorY >= baseY) return false;
+
+    // The full invisible floor catches a player who falls between islands.
+    // The four low walls keep players from walking/bridging out of the
+    // temporary arena. Only the floor layer is treated as lethal below.
+    const commands = [
+        `fill ${region.minX} ${floorY} ${region.minZ} ${region.maxX} ${floorY} ${region.maxZ} minecraft:barrier`,
+        `fill ${region.minX} ${floorY + 1} ${region.minZ} ${region.maxX} ${baseY} ${region.minZ} minecraft:barrier`,
+        `fill ${region.minX} ${floorY + 1} ${region.maxZ} ${region.maxX} ${baseY} ${region.maxZ} minecraft:barrier`,
+        `fill ${region.minX} ${floorY + 1} ${region.minZ + 1} ${region.minX} ${baseY} ${region.maxZ - 1} minecraft:barrier`,
+        `fill ${region.maxX} ${floorY + 1} ${region.minZ + 1} ${region.maxX} ${baseY} ${region.maxZ - 1} minecraft:barrier`
+    ];
+    if (!commands.every(command => runMapCommand(game, command))) return false;
+
+    const floor = getBlock(game.dimension, {
+        x: Math.floor(game.mapOrigin.x), y: floorY, z: Math.floor(game.mapOrigin.z)
+    });
+    const wall = getBlock(game.dimension, {
+        x: region.minX, y: baseY, z: Math.floor(game.mapOrigin.z)
+    });
+    return !!floor && !!wall && floor.typeId === "minecraft:barrier" && wall.typeId === "minecraft:barrier";
 }
 
 function cleanupMap(game) {
     const region = game.generatedRegion;
     if (!region) return;
     runMapCommand(game, `fill ${region.minX} ${region.minY} ${region.minZ} ${region.maxX} ${region.maxY} ${region.maxZ} air`);
+    const floorY = game.barrierFloorY;
+    if (floorY !== null && region) {
+        runMapCommand(game, `fill ${region.minX} ${floorY} ${region.minZ} ${region.maxX} ${floorY} ${region.maxZ} air`);
+        runMapCommand(game, `fill ${region.minX} ${floorY + 1} ${region.minZ} ${region.maxX} ${region.maxY} ${region.minZ} air`);
+        runMapCommand(game, `fill ${region.minX} ${floorY + 1} ${region.maxZ} ${region.maxX} ${region.maxY} ${region.maxZ} air`);
+        runMapCommand(game, `fill ${region.minX} ${floorY + 1} ${region.minZ + 1} ${region.minX} ${region.maxY} ${region.maxZ - 1} air`);
+        runMapCommand(game, `fill ${region.maxX} ${floorY + 1} ${region.minZ + 1} ${region.maxX} ${region.maxY} ${region.maxZ - 1} air`);
+    }
     if (game.tickingAreaCreated && game.tickingAreaName) {
         runMapCommand(game, `tickingarea remove ${game.tickingAreaName}`);
         game.tickingAreaCreated = false;
@@ -567,6 +607,37 @@ function getBlock(dimension, location) {
 
 function isAirBlock(block) {
     return !!block && (block.typeId === "minecraft:air" || block.isAir === true);
+}
+
+function getGameMemberEntity(member) {
+    if (!member) return null;
+    return member.isBot
+        ? getEntityById(member.id)
+        : (getPlayerById(member.id) || getPlayerByName(member.name));
+}
+
+function checkBarrierDeaths(game) {
+    if (!game.barrierBuilt || game.barrierFloorY === null || !game.generatedRegion) return;
+    const region = game.generatedRegion;
+    for (const member of game.members) {
+        if (member.eliminated || member.respawning) continue;
+        const entity = getGameMemberEntity(member);
+        const location = getLocation(entity);
+        if (!entity || !location || location.dimensionId !== game.dimensionId) continue;
+        if (location.y > game.barrierFloorY + 2.5) continue;
+        const x = Math.floor(location.x);
+        const z = Math.floor(location.z);
+        if (x < region.minX || x > region.maxX || z < region.minZ || z > region.maxZ) continue;
+        const floor = getBlock(game.dimension, { x, y: game.barrierFloorY, z });
+        // Deliberately inspect only the dedicated floor layer. Touching the
+        // invisible perimeter walls does not trigger this lethal check.
+        if (!floor || floor.typeId !== "minecraft:barrier") continue;
+        try {
+            entity.kill();
+        } catch (error) {
+            safeCommand(entity, "kill @s");
+        }
+    }
 }
 
 function verifyMapSpawns(game, map, baseY) {
@@ -775,6 +846,8 @@ function startGame(host, mode, botCount, giveKits = true, mapId = "") {
         generatedRegion: null,
         tickingAreaName: "",
         tickingAreaCreated: false,
+        barrierFloorY: null,
+        barrierBuilt: false,
         resourceTick: 0,
         dimension,
         dimensionId: originLocation.dimensionId,
@@ -791,7 +864,7 @@ function startGame(host, mode, botCount, giveKits = true, mapId = "") {
     buildMap(game);
     if (!game.mapBuilt) {
         cleanupMap(game);
-        safeMessage(host, "§cThe BedWars map could not load. Check that the structure files are installed and try again in a clear area.");
+        safeMessage(host, "§cThe arena could not load a verified structure and safety barrier. Check the behavior pack and try again.");
         return;
     }
 
@@ -940,7 +1013,11 @@ function evaluateGame(game) {
     if (game.mode === "ffa") {
         if (activeMembers.length <= 1) {
             const winner = activeMembers[0];
-            endGame(game, winner ? `§a${winner.name} won the FFA!` : "§eThe FFA ended with no winner.");
+            endGame(
+                game,
+                winner ? `§a${winner.name} won the FFA!` : "§eThe FFA ended with no winner.",
+                winner ? { winnerMember: winner, winningTeam: winner.team } : null
+            );
         }
         return;
     }
@@ -949,7 +1026,11 @@ function evaluateGame(game) {
     if (activeTeams.size <= 1) {
         const winnerTeam = activeTeams.size === 1 ? Array.from(activeTeams)[0] : -1;
         const winnerName = winnerTeam >= 0 ? TEAM_NAMES[winnerTeam] || `Team ${winnerTeam + 1}` : "nobody";
-        endGame(game, `§a${winnerName} won ${modeName(game.mode)}!`);
+        endGame(
+            game,
+            `§a${winnerName} won ${modeName(game.mode)}!`,
+            winnerTeam >= 0 ? { winningTeam: winnerTeam } : null
+        );
     }
 }
 
@@ -957,6 +1038,7 @@ function tickGames() {
     for (const game of games.values()) {
         if (game.status !== "active") continue;
         game.resourceTick += 5;
+        checkBarrierDeaths(game);
         checkBeds(game);
         if (game.resourceTick % 20 === 0) {
             generateResources(game);
@@ -995,11 +1077,74 @@ function leaveGame(player) {
     evaluateGame(game);
 }
 
-function endGame(game, reason) {
+function runDimensionCommand(dimension, command) {
+    try {
+        if (!dimension) return false;
+        dimension.runCommand(command);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+function launchVictoryFireworks(dimension, location) {
+    if (!dimension || !location) return;
+    const points = [
+        { x: location.x, y: location.y + 1.5, z: location.z },
+        { x: location.x + 1.5, y: location.y + 1.5, z: location.z },
+        { x: location.x - 1.5, y: location.y + 1.5, z: location.z + 1 }
+    ];
+    for (const point of points) {
+        const x = Number(point.x.toFixed(2));
+        const y = Number(point.y.toFixed(2));
+        const z = Number(point.z.toFixed(2));
+        if (!runDimensionCommand(dimension, `summon fireworks_rocket ${x} ${y} ${z}`)) {
+            runDimensionCommand(dimension, `summon minecraft:fireworks_rocket ${x} ${y} ${z}`);
+        }
+    }
+}
+
+function showVictory(game, victory, players) {
+    if (!victory || !players || players.length === 0) return;
+    const team = Number.isInteger(victory.winningTeam) ? victory.winningTeam : 0;
+    const color = TEAM_COLORS[team] || "§a";
+    const teamName = TEAM_NAMES[team] || `Team ${team + 1}`;
+    const subtitle = `${color}${teamName} team wins!`;
+
+    for (const player of players) {
+        if (!isValid(player)) continue;
+        safeCommand(player, "title @s times 10 60 20");
+        safeCommand(player, "title @s title §aVictory");
+        safeCommand(player, `title @s subtitle ${subtitle}`);
+        safeMessage(player, `§aVictory! ${subtitle}`);
+        const location = getLocation(player);
+        const dimension = location ? getDimension(location.dimensionId) : game.dimension;
+        if (!location) continue;
+        // Three waves make the rockets visibly rise next to every winning
+        // player and teammate rather than only at the old arena origin.
+        for (let wave = 0; wave < 3; wave += 1) {
+            system.runTimeout(() => launchVictoryFireworks(dimension, location), wave * 8);
+        }
+    }
+}
+
+function endGame(game, reason, victory = null) {
     if (!game || game.status === "ending") return;
     game.status = "ending";
     const party = parties.get(game.partyCode);
     if (party) notifyParty(party, reason);
+    const victoryPlayers = [];
+    if (victory) {
+        for (const member of game.members) {
+            if (member.isBot || member.eliminated) continue;
+            const isWinner = victory.winnerMember
+                ? member.id === victory.winnerMember.id || member.name === victory.winnerMember.name
+                : member.team === victory.winningTeam;
+            if (!isWinner) continue;
+            const player = getPlayerById(member.id) || getPlayerByName(member.name);
+            if (player && !victoryPlayers.includes(player)) victoryPlayers.push(player);
+        }
+    }
 
     for (const team of game.teams) {
         if (team.bed) removeBed(game, team.bed);
@@ -1019,6 +1164,9 @@ function endGame(game, reason) {
         playerGames.delete(member.id);
     }
 
+    // Winners have now been returned to their saved locations, so the title
+    // and fireworks appear beside the real player and their teammate.
+    showVictory(game, victory, victoryPlayers);
     cleanupMap(game);
 
     if (party) {
