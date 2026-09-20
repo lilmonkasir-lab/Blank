@@ -189,7 +189,7 @@
           "delay_the_blow": 0.0,
           "reach_multiplier": 3.0,
           "speed_multiplier": 1.2,
-          "attack_duration": 0.3,
+          "attack_duration": 0.25,
           "hit_delay_pct": 0.25
         },
         "minecraft:behavior.melee_attack": {
@@ -218,7 +218,7 @@
           "delay_the_blow": 0.0,
           "reach_multiplier": 0,
           "speed_multiplier": 1.2,
-          "attack_duration": 0.3,
+          "attack_duration": 0.25,
           "hit_delay_pct": 0.4
         },
         "minecraft:behavior.melee_attack": {
@@ -244,7 +244,7 @@
           "delay_the_blow": 0.0,
           "reach_multiplier": 0,
           "speed_multiplier": 1.2,
-          "attack_duration": 0.3,
+          "attack_duration": 0.25,
           "hit_delay_pct": 0.4
         },
         "minecraft:behavior.melee_attack": {
@@ -291,8 +291,8 @@
         "generatesBubbles": false
       },
       "minecraft:health": {
-        "value": 20,
-        "max": 30
+        "value": 40,
+        "max": 40
       },
       "minecraft:collision_box": {
         "width": 0.6,
@@ -367,6 +367,26 @@
               ]
             },
             "event": "army21:shield_hit"
+          },
+          "deals_damage": false
+        },
+        {
+          "cause": "entity_explosion",
+          "on_damage": {
+            "filters": {
+              "test": "has_tag",
+              "value": "bot_crystal_protected"
+            }
+          },
+          "deals_damage": false
+        },
+        {
+          "cause": "block_explosion",
+          "on_damage": {
+            "filters": {
+              "test": "has_tag",
+              "value": "bot_crystal_protected"
+            }
           },
           "deals_damage": false
         }
@@ -489,7 +509,7 @@
         }
       },
       "minecraft:loot": {
-        "table": "loot_tables/entities/diamond_loot.json"
+        "table": "loot_tables/entities/diamondl.json"
       }
     },
     "events": {
