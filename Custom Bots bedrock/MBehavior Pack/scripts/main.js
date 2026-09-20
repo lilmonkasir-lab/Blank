@@ -8,40 +8,12 @@ import "./custom/names";
 import "./custom/death";
 import "./custom/spread";
 import "./custom/script1";
-
-const TARGET_CONFIG = {
-    botTargets: new Map(),
-    allowedTargets: new Set(),
-    targetingMode: "all"
-};
-
-function getBotTarget(botId) {
-    return TARGET_CONFIG.botTargets.get(botId) || null;
-}
-
-function setBotTarget(botId, playerName) {
-    if (playerName) {
-        TARGET_CONFIG.botTargets.set(botId, playerName);
-        TARGET_CONFIG.allowedTargets.add(playerName);
-        TARGET_CONFIG.targetingMode = "specific";
-    } else {
-        TARGET_CONFIG.botTargets.delete(botId);
-    }
-}
-
-function isPlayerAllowedTarget(playerName) {
-    if (TARGET_CONFIG.targetingMode === "all") return true;
-    return TARGET_CONFIG.allowedTargets.has(playerName);
-}
-
-function getTargetPlayerNames() {
-    const players = world.getPlayers();
-    return players.map(p => p.name);
-}
-
-function getOnlinePlayerNames() {
-    return world.getPlayers().map(p => p.name);
-}
+import { PVP_CONFIG } from "./custom/pvp";
+import {
+    TARGET_CONFIG,
+    isPlayerAllowedTarget,
+    getOnlinePlayerNames
+} from "./custom/targeting";
 
 (function() {
     const HEAL_BOTS = [
@@ -359,7 +331,7 @@ function getOnlinePlayerNames() {
 (function() {
     const PEARL_CONFIG = {
         enabled: true,
-        BOTS: [],
+        BOTS: ["bot:army21"],
         PEARL_CHANCE: {
             "bot:army21": {
                 "default": 0.1,
@@ -1213,6 +1185,10 @@ function getOnlinePlayerNames() {
             .button("Pearl")
             .button("Sneak")
             .button("Jump")
+            .button("Mace & Wind Charge")
+            .button("Crystal PvP")
+            .button("Bridge")
+            .button("Combat Movement")
             .button("Target Permission");
 
         form.show(player).then((response) => {
@@ -1223,8 +1199,113 @@ function getOnlinePlayerNames() {
                 case 2: showPearlMenu(player); break;
                 case 3: showSneakMenu(player); break;
                 case 4: showJumpMenu(player); break;
-                case 5: showTargetMenu(player); break;
+                case 5: showMaceWindMenu(player); break;
+                case 6: showCrystalPvpMenu(player); break;
+                case 7: showBridgeMenu(player); break;
+                case 8: showCombatMovementMenu(player); break;
+                case 9: showTargetMenu(player); break;
             }
+        });
+    }
+
+    function showMaceWindMenu(player) {
+        const mace = PVP_CONFIG.mace;
+        const wind = PVP_CONFIG.windCharge;
+        const form = new ModalFormData()
+            .title("Mace & Wind Charge")
+            .toggle("Enable mace smash attacks", mace.enabled)
+            .toggle("Enable wind charge attacks", wind.enabled)
+            .slider("Mace cooldown (ticks)", 20, 160, 5, mace.cooldownTicks)
+            .slider("Wind charge cooldown (ticks)", 20, 160, 5, wind.cooldownTicks)
+            .slider("Mace smash bonus damage", 0, 10, 1, mace.smashBonusDamage);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [maceEnabled, windEnabled, maceCooldown, windCooldown, bonusDamage] = response.formValues;
+            mace.enabled = maceEnabled;
+            wind.enabled = windEnabled;
+            mace.cooldownTicks = maceCooldown;
+            wind.cooldownTicks = windCooldown;
+            mace.smashBonusDamage = bonusDamage;
+            player.sendMessage(`§aMace ${maceEnabled ? "enabled" : "disabled"}, wind charge ${windEnabled ? "enabled" : "disabled"}`);
+            showMainMenu(player);
+        });
+    }
+
+    function showCrystalPvpMenu(player) {
+        const crystal = PVP_CONFIG.crystal;
+        const form = new ModalFormData()
+            .title("Crystal PvP")
+            .toggle("Enable crystal combos", crystal.enabled)
+            .slider("Pops per combo", 1, 6, 1, crystal.comboPops)
+            .slider("Trigger distance", 4, 16, 1, crystal.triggerDistance)
+            .slider("Minimum self distance", 2, 6.5, 0.25, crystal.selfDistance)
+            .slider("Cooldown (ticks)", 20, 240, 5, crystal.cooldownTicks);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [enabled, pops, distance, selfDistance, cooldown] = response.formValues;
+            crystal.enabled = enabled;
+            crystal.comboPops = Math.max(1, Math.floor(pops));
+            crystal.triggerDistance = distance;
+            crystal.selfDistance = selfDistance;
+            crystal.cooldownTicks = cooldown;
+            player.sendMessage(`§aCrystal PvP ${enabled ? "enabled" : "disabled"} (${crystal.comboPops} pops per combo)`);
+            showMainMenu(player);
+        });
+    }
+
+    function showBridgeMenu(player) {
+        const bridge = PVP_CONFIG.bridge;
+        const form = new ModalFormData()
+            .title("Bridge Settings")
+            .toggle("Enable bridging", bridge.enabled)
+            .toggle("Place a clutch block while falling", bridge.clutch)
+            .slider("Maximum blocks per bridge", 8, 96, 8, bridge.maxBlocksPerBridge)
+            .slider("Target distance", 16, 80, 4, bridge.targetDistance);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [enabled, clutch, maxBlocks, targetDistance] = response.formValues;
+            bridge.enabled = enabled;
+            bridge.clutch = clutch;
+            bridge.maxBlocksPerBridge = Math.max(8, Math.floor(maxBlocks));
+            bridge.targetDistance = targetDistance;
+            player.sendMessage(`§aBridging ${enabled ? "enabled" : "disabled"}`);
+            showMainMenu(player);
+        });
+    }
+
+    function showCombatMovementMenu(player) {
+        const combat = PVP_CONFIG.combat;
+        const form = new ModalFormData()
+            .title("Combat Movement")
+            .toggle("Enable PvP movement", combat.enabled)
+            .toggle("Strafe around targets", combat.strafe)
+            .slider("Target distance", 8, 40, 2, combat.targetDistance)
+            .slider("Switch strafe side (ticks)", 8, 80, 4, combat.strafeSwitchTicks);
+
+        form.show(player).then((response) => {
+            if (response.canceled) {
+                showMainMenu(player);
+                return;
+            }
+            const [enabled, strafe, targetDistance, switchTicks] = response.formValues;
+            combat.enabled = enabled;
+            combat.strafe = strafe;
+            combat.targetDistance = targetDistance;
+            combat.strafeSwitchTicks = switchTicks;
+            player.sendMessage(`§aPvP movement ${enabled ? "enabled" : "disabled"}`);
+            showMainMenu(player);
         });
     }
 
