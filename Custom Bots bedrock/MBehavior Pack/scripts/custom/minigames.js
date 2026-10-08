@@ -815,7 +815,7 @@ function finishGameStart(game, party, players, safeBotCount, host) {
     const mode = game.mode;
     const dimension = game.dimension;
     const combatants = [];
-    for (const player of players.filter(candidate => isValid(candidate))) {
+    for (const player of players.filter(candidate => party.memberIds.includes(candidate.id) && isValid(candidate))) {
         const member = createGameMember(player, false, 0, null, getLocation(player));
         combatants.push(member);
         game.members.push(member);
