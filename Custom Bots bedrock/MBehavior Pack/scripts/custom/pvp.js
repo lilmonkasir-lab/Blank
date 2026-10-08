@@ -12,7 +12,9 @@ import { isPlayerAllowedTarget } from "./targeting";
  *   - movement and timing: target lock, circle strafing, hit-select/counter
  *     movement, jump resets, and server-side W-tap/S-tap simulation;
  *   - utility: velocity-led wind charges, short rod knockback simulation,
- *     shield-aware axe switching, and reachable low-health traps.
+ *     shield-aware axe switching, and reachable low-health traps;
+ *   - explosive sequences: a reachable rail/TNT minecart/flame-arrow path and
+ *     a reachable TNT/Flint-and-Steel fire path.
  *
  * Everything is guarded with small try/catch blocks because a bot can be killed
  * or unloaded between two scheduled ticks. Bedrock does not expose literal
@@ -29,9 +31,11 @@ export const PVP_CONFIG = {
         comboPops: 3,
         triggerDistance: 10,
         minimumDistance: 3.0,
-        popDelayTicks: 5,
-        gapTicks: 9,
-        cooldownTicks: 90,
+        // The bot can complete a crystal placement/pop in a few server ticks
+        // without claiming to inject client clicks or CPS.
+        popDelayTicks: 1,
+        gapTicks: 1,
+        cooldownTicks: 20,
         selfDistance: 4.0,
         targetMustBeGrounded: true
     },
@@ -79,6 +83,15 @@ export const PVP_CONFIG = {
         minimumHealthFraction: 0.45,
         cooldownTicks: 40,
         maxPlacementsPerTarget: 2
+    },
+    explosives: {
+        enabled: true,
+        targetDistance: 12,
+        cooldownTicks: 100,
+        minimumSelfDistance: 4.5,
+        arrowSpeed: 2.8,
+        railMinecart: true,
+        tntFlintAndSteel: true
     },
     bridge: {
         enabled: true,
@@ -139,6 +152,7 @@ const windChargeStates = new Map();
 const axeStates = new Map();
 const rodStates = new Map();
 const trapStates = new Map();
+const explosiveStates = new Map();
 const bridgeStates = new Map();
 const combatStates = new Map();
 const CRYSTAL_PROTECTION_TAG = "bot_crystal_protected";
@@ -636,7 +650,7 @@ function isRodBusy(bot) {
 
 function isSpecialActionBusy(bot) {
     return isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
-        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot);
+        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot);
 }
 
 function finishMaceAttack(bot, state) {
@@ -696,7 +710,7 @@ function applyMaceSmash(attacker, victim, state) {
 }
 
 function updateMaceBot(bot, tick) {
-    if (isExternalActionBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
     if (!PVP_CONFIG.mace.enabled || isIgnoredBot(bot)) {
         const state = maceStates.get(bot.id);
         if (state && state.phase === "active") finishMaceAttack(bot, state);
@@ -779,7 +793,7 @@ function startAxeAttack(bot, target, tick) {
 }
 
 function updateAxeBot(bot, tick) {
-    if (isExternalActionBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
     if (!PVP_CONFIG.axe.enabled || isIgnoredBot(bot)) {
         const state = axeStates.get(bot.id);
         if (state && state.phase === "active") finishAxeAttack(bot, state);
@@ -813,7 +827,7 @@ function updateAxeBot(bot, tick) {
     // Axe mode is only a short shield-disabling window. It cannot interrupt
     // crystal placement, bridging, mace timing, wind charges, or a rod cast.
     if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
-        isWindChargeBusy(bot) || isRodBusy(bot)) return;
+        isWindChargeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot)) return;
 
     const target = getNearestTarget(bot, PVP_CONFIG.axe.maximumDistance);
     if (!target) return;
@@ -866,7 +880,7 @@ function startRodAction(bot, target, tick) {
 }
 
 function updateRodBot(bot, tick) {
-    if (isExternalActionBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
     if (!PVP_CONFIG.rod.enabled || isIgnoredBot(bot)) {
         const state = rodStates.get(bot.id);
         if (state && state.phase === "active") finishRodAction(bot, state);
@@ -939,7 +953,8 @@ function updateTrapBot(bot, tick) {
     if (isExternalActionBusy(bot)) return;
     if (!PVP_CONFIG.trap.enabled || isIgnoredBot(bot)) return;
     if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
-        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot)) return;
+        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot) ||
+        isExplosiveBusy(bot)) return;
 
     const target = getNearestTarget(bot, 6.5);
     if (!target) return;
@@ -960,6 +975,245 @@ function updateTrapBot(bot, tick) {
     if (!cell || !runSetBlock(bot, cell, PVP_CONFIG.trap.block)) return;
     state.placements += 1;
     state.cooldownUntil = tick + PVP_CONFIG.trap.cooldownTicks;
+}
+
+function getExplosiveCell(bot, target) {
+    const targetX = Math.floor(target.location.x);
+    const targetY = Math.floor(target.location.y);
+    const targetZ = Math.floor(target.location.z);
+    const away = getDirection(bot.location, target.location);
+    const rounded = { x: Math.round(away.x), z: Math.round(away.z) };
+    const directions = [
+        { x: -rounded.x, z: -rounded.z },
+        { x: rounded.x, z: rounded.z },
+        { x: 1, z: 0 }, { x: -1, z: 0 },
+        { x: 0, z: 1 }, { x: 0, z: -1 }
+    ];
+    const seen = new Set();
+    for (const direction of directions) {
+        if (direction.x === 0 && direction.z === 0) continue;
+        for (const yOffset of [0, -1, 1]) {
+            const cell = {
+                x: targetX + direction.x,
+                y: targetY + yOffset,
+                z: targetZ + direction.z
+            };
+            const key = `${cell.x},${cell.y},${cell.z}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const existing = getBlock(bot.dimension, cell.x, cell.y, cell.z);
+            const support = getBlock(bot.dimension, cell.x, cell.y - 1, cell.z);
+            const center = { x: cell.x + 0.5, y: cell.y + 0.5, z: cell.z + 0.5 };
+            if (!existing || !isReplaceable(existing) || !isSolid(support)) continue;
+            if (!canReachPlacement(bot, cell)) continue;
+            if (distance3d(bot.location, center) < PVP_CONFIG.explosives.minimumSelfDistance) continue;
+            if (distance3d(target.location, center) > 6.5) continue;
+            return cell;
+        }
+    }
+    return null;
+}
+
+function getEntityNear(dimension, typeIds, location, radius = 2.5) {
+    for (const typeId of typeIds) {
+        try {
+            const entities = dimension.getEntities({ type: typeId, location, maxDistance: radius });
+            if (entities.length > 0) return entities[0];
+        } catch (error) {}
+    }
+    return null;
+}
+
+function spawnTntMinecart(dimension, location) {
+    const typeIds = ["minecraft:tnt_minecart", "tnt_minecart"];
+    for (const typeId of typeIds) {
+        try {
+            const minecart = dimension.spawnEntity(typeId, location);
+            if (minecart) return minecart;
+        } catch (error) {}
+    }
+    try {
+        dimension.runCommand(`summon tnt_minecart ${location.x} ${location.y} ${location.z}`);
+    } catch (error) {}
+    return getEntityNear(dimension, typeIds, location);
+}
+
+function shootFlameArrow(bot, targetLocation) {
+    equipItem(bot, "minecraft:bow");
+    try {
+        bot.runCommand("enchant @s flame 1");
+    } catch (error) {}
+
+    const start = {
+        x: bot.location.x,
+        y: bot.location.y + 1.45,
+        z: bot.location.z
+    };
+    const dx = targetLocation.x - start.x;
+    const dy = targetLocation.y - start.y;
+    const dz = targetLocation.z - start.z;
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    const direction = { x: dx / length, y: dy / length, z: dz / length };
+    let arrow = null;
+    try {
+        arrow = bot.dimension.spawnEntity("minecraft:arrow", start);
+    } catch (error) {}
+    if (!arrow) {
+        try {
+            bot.dimension.runCommand(`summon arrow ${start.x} ${start.y} ${start.z}`);
+        } catch (error) {}
+        arrow = getEntityNear(bot.dimension, ["minecraft:arrow", "arrow"], start);
+    }
+    if (!arrow) return false;
+
+    try {
+        arrow.setRotation({
+            x: -Math.atan2(direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z)) * (180 / Math.PI),
+            y: Math.atan2(-direction.x, direction.z) * (180 / Math.PI)
+        });
+        arrow.applyImpulse({
+            x: direction.x * PVP_CONFIG.explosives.arrowSpeed,
+            y: direction.y * PVP_CONFIG.explosives.arrowSpeed,
+            z: direction.z * PVP_CONFIG.explosives.arrowSpeed
+        });
+        // This is a server-side projectile approximation of a flame bow; it
+        // does not claim to inject a literal client click.
+        arrow.setOnFire(8, true);
+    } catch (error) {}
+    system.runTimeout(() => {
+        try {
+            if (isValid(arrow)) arrow.kill();
+        } catch (error) {}
+    }, 12);
+    return true;
+}
+
+function primeMinecart(bot, minecart) {
+    if (!minecart || !isValid(minecart)) return;
+    let triggered = false;
+    try {
+        minecart.triggerEvent("minecraft:on_instant_prime");
+        triggered = true;
+    } catch (error) {}
+    try {
+        if (isValid(minecart)) minecart.setOnFire(2, true);
+    } catch (error) {}
+    try {
+        if (isValid(minecart)) minecart.applyDamage(1, { cause: "fire", damagingEntity: bot });
+    } catch (error) {}
+
+    // If an older Bedrock runtime ignores the event, use the documented summon
+    // event as a final fallback. It still creates the minecart only at the
+    // reachable cell selected above.
+    system.runTimeout(() => {
+        try {
+            if (!isValid(minecart)) return;
+            const location = minecart.location;
+            bot.dimension.runCommand(`summon tnt_minecart ${location.x} ${location.y} ${location.z} minecraft:on_instant_prime`);
+            minecart.kill();
+        } catch (error) {
+            if (!triggered) {
+                try { if (isValid(minecart)) minecart.kill(); } catch (killError) {}
+            }
+        }
+    }, 2);
+}
+
+function finishExplosiveAction(bot, state) {
+    setPvpActionActive(bot, false);
+    restoreWeapon(bot);
+    state.phase = "cooldown";
+    state.cooldownUntil = system.currentTick + PVP_CONFIG.explosives.cooldownTicks;
+    state.targetId = null;
+    state.minecartId = null;
+}
+
+function startRailMinecartAction(bot, target, state, cell, tick) {
+    setPvpActionActive(bot, true);
+    equipItem(bot, "minecraft:rail");
+    if (!runSetBlock(bot, cell, "minecraft:rail")) {
+        finishExplosiveAction(bot, state);
+        return false;
+    }
+    const minecartLocation = { x: cell.x + 0.5, y: cell.y + 0.1, z: cell.z + 0.5 };
+    const minecart = spawnTntMinecart(bot.dimension, minecartLocation);
+    if (!minecart) {
+        finishExplosiveAction(bot, state);
+        return false;
+    }
+    state.phase = "active";
+    state.kind = "rail_minecart";
+    state.targetId = target.id;
+    state.minecartId = minecart.id;
+    state.cooldownUntil = 0;
+    state.nextKind = "tnt";
+    shootFlameArrow(bot, minecart.location);
+    system.runTimeout(() => primeMinecart(bot, minecart), 2);
+    system.runTimeout(() => finishExplosiveAction(bot, state), 12);
+    return true;
+}
+
+function startTntFlintAction(bot, target, state, cell, tick) {
+    const fireCell = { x: cell.x, y: cell.y + 1, z: cell.z };
+    const fireSpace = getBlock(bot.dimension, fireCell.x, fireCell.y, fireCell.z);
+    if (!fireSpace || !isReplaceable(fireSpace) || !canReachPlacement(bot, fireCell)) {
+        finishExplosiveAction(bot, state);
+        return false;
+    }
+    setPvpActionActive(bot, true);
+    equipItem(bot, "minecraft:tnt");
+    if (!runSetBlock(bot, cell, "minecraft:tnt")) {
+        finishExplosiveAction(bot, state);
+        return false;
+    }
+    state.phase = "active";
+    state.kind = "tnt_flint_and_steel";
+    state.targetId = target.id;
+    state.minecartId = null;
+    state.cooldownUntil = 0;
+    state.nextKind = "rail_minecart";
+    equipItem(bot, "minecraft:flint_and_steel");
+    // Place fire on top of the TNT, the same local action a flint-and-steel
+    // use performs, while retaining the reach and support checks.
+    if (!runSetBlock(bot, fireCell, "minecraft:fire") &&
+        !runSetBlock(bot, fireCell, "fire")) {
+        finishExplosiveAction(bot, state);
+        return false;
+    }
+    system.runTimeout(() => finishExplosiveAction(bot, state), 12);
+    return true;
+}
+
+function isExplosiveBusy(bot) {
+    return explosiveStates.get(bot.id)?.phase === "active";
+}
+
+function updateExplosiveBot(bot, tick) {
+    if (isExternalActionBusy(bot)) return;
+    if (!PVP_CONFIG.explosives.enabled || isIgnoredBot(bot)) return;
+    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
+        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot)) return;
+
+    let state = explosiveStates.get(bot.id);
+    if (!state) {
+        state = { phase: "idle", cooldownUntil: 0, targetId: null, minecartId: null, nextKind: "rail_minecart" };
+        explosiveStates.set(bot.id, state);
+    }
+    if (state.phase === "cooldown") {
+        if (tick >= state.cooldownUntil) state.phase = "idle";
+        else return;
+    }
+
+    const target = getNearestTarget(bot, PVP_CONFIG.explosives.targetDistance);
+    if (!target) return;
+    const cell = getExplosiveCell(bot, target);
+    if (!cell) return;
+
+    if (state.nextKind === "rail_minecart" && PVP_CONFIG.explosives.railMinecart) {
+        startRailMinecartAction(bot, target, state, cell, tick);
+    } else if (PVP_CONFIG.explosives.tntFlintAndSteel) {
+        startTntFlintAction(bot, target, state, cell, tick);
+    }
 }
 
 function getWindChargeAt(dimension, location, radius = 2.5) {
@@ -1061,7 +1315,7 @@ function startWindCharge(bot, target, tick) {
 }
 
 function updateWindChargeBot(bot, tick) {
-    if (isExternalActionBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
     if (!PVP_CONFIG.windCharge.enabled || isIgnoredBot(bot)) {
         const activeState = windChargeStates.get(bot.id);
         if (activeState && activeState.phase === "active") finishWindCharge(bot, activeState);
@@ -1251,7 +1505,7 @@ function placeNextCrystal(bot, state, target) {
         } catch (error) {
             finishCrystalCombo(bot, state);
         }
-    }, 2);
+    }, 1);
 
     return true;
 }
@@ -1276,7 +1530,7 @@ function startCrystalCombo(bot, target) {
 }
 
 function updateCrystalBot(bot, tick) {
-    if (isExternalActionBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
     if (!PVP_CONFIG.crystal.enabled || isIgnoredBot(bot)) {
         const activeState = crystalStates.get(bot.id);
         if (activeState && activeState.phase !== "idle" && activeState.phase !== "cooldown") {
@@ -1288,7 +1542,7 @@ function updateCrystalBot(bot, tick) {
     // Do not swap away from a mace, wind charge, or bridge block halfway
     // through that action. Normal sword and crystal logic resumes afterward.
     if (isBridgeBusy(bot) || isMaceBusy(bot) || isWindChargeBusy(bot) ||
-        isAxeBusy(bot) || isRodBusy(bot)) return;
+        isAxeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot)) return;
 
     let state = crystalStates.get(bot.id);
     if (!state) {
@@ -1447,7 +1701,7 @@ function updateBridgeBot(bot, tick) {
     if (tick % Math.max(1, PVP_CONFIG.bridge.checkInterval) !== 0) return;
     if (tick < state.cooldownUntil) return;
     if (isCrystalBusy(bot) || isMaceBusy(bot) || isWindChargeBusy(bot) ||
-        isAxeBusy(bot) || isRodBusy(bot)) return;
+        isAxeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot)) return;
 
     const target = getNearestTarget(bot, PVP_CONFIG.bridge.targetDistance);
     if (!target || !isBridgeNeeded(bot, target)) {
@@ -1510,6 +1764,7 @@ function updateBridgeBot(bot, tick) {
 }
 
 function updateClutch(bot) {
+    if (isExplosiveBusy(bot)) return;
     if (!PVP_CONFIG.bridge.enabled || !PVP_CONFIG.bridge.clutch) return;
     const bridgeState = bridgeStates.get(bot.id);
     if (!bridgeState || !bridgeState.active) return;
@@ -1529,7 +1784,7 @@ function applySprintReset(attacker, victim) {
         !isValid(attacker) || !isValid(victim)) return;
     if (isMaceBusy(attacker) || isWindChargeBusy(attacker) || isAxeBusy(attacker) ||
         isRodBusy(attacker) || isCrystalBusy(attacker) || isBridgeBusy(attacker) ||
-        isExternalActionBusy(attacker)) return;
+        isExplosiveBusy(attacker) || isExternalActionBusy(attacker)) return;
 
     const direction = getDirection(attacker.location, victim.location);
     try {
@@ -1632,29 +1887,31 @@ function updateCombatBot(bot, tick) {
     } catch (error) {}
 }
 
-world.afterEvents.entityHitEntity.subscribe(event => {
-    const attacker = event.damagingEntity;
-    const victim = event.hitEntity;
-    if (!attacker || !victim) return;
+try {
+    world.afterEvents.entityHitEntity.subscribe(event => {
+        const attacker = event.damagingEntity;
+        const victim = event.hitEntity;
+        if (!attacker || !victim) return;
 
-    if (attacker.typeId && attacker.typeId.startsWith("bot:") &&
-        victim.typeId === "minecraft:player") {
-        applySprintReset(attacker, victim);
-    }
+        if (attacker.typeId && attacker.typeId.startsWith("bot:") &&
+            victim.typeId === "minecraft:player") {
+            applySprintReset(attacker, victim);
+        }
 
-    const state = maceStates.get(attacker.id);
-    if (!state || state.phase !== "active" || state.didSmash) return;
-    if (state.targetId !== victim.id || system.currentTick < state.canSmashAfterTick) return;
+        const state = maceStates.get(attacker.id);
+        if (!state || state.phase !== "active" || state.didSmash) return;
+        if (state.targetId !== victim.id || system.currentTick < state.canSmashAfterTick) return;
 
-    let descending = false;
-    try {
-        const velocity = attacker.getVelocity();
-        descending = !!velocity && velocity.y < -0.05;
-    } catch (error) {}
-    if (!descending && !state.wasAirborne) return;
+        let descending = false;
+        try {
+            const velocity = attacker.getVelocity();
+            descending = !!velocity && velocity.y < -0.05;
+        } catch (error) {}
+        if (!descending && !state.wasAirborne) return;
 
-    applyMaceSmash(attacker, victim, state);
-});
+        applyMaceSmash(attacker, victim, state);
+    });
+} catch (error) {}
 
 try {
     world.afterEvents.entityHurt.subscribe(event => {
@@ -1722,6 +1979,9 @@ function cleanupStates() {
     for (const id of trapStates.keys()) {
         if (!activeIds.has(id)) trapStates.delete(id);
     }
+    for (const id of explosiveStates.keys()) {
+        if (!activeIds.has(id)) explosiveStates.delete(id);
+    }
     for (const id of bridgeStates.keys()) {
         if (!activeIds.has(id)) bridgeStates.delete(id);
     }
@@ -1745,6 +2005,7 @@ system.runInterval(() => {
                 updateAxeBot(bot, tick);
                 updateRodBot(bot, tick);
                 updateTrapBot(bot, tick);
+                updateExplosiveBot(bot, tick);
                 updateMaceBot(bot, tick);
                 updateWindChargeBot(bot, tick);
                 updateCrystalBot(bot, tick);
@@ -1765,6 +2026,7 @@ try {
         axeStates.delete(id);
         rodStates.delete(id);
         trapStates.delete(id);
+        explosiveStates.delete(id);
         bridgeStates.delete(id);
         combatStates.delete(id);
     });
@@ -1776,6 +2038,7 @@ try {
         axeStates.delete(id);
         rodStates.delete(id);
         trapStates.delete(id);
+        explosiveStates.delete(id);
         bridgeStates.delete(id);
         combatStates.delete(id);
     });

@@ -426,15 +426,20 @@ function runMapCommand(game, command) {
 
 function loadMapStructure(game, map, baseY) {
     const region = game.generatedRegion;
-    const structureName = `bedwars:${map.id}`;
+    const structureNames = [`bedwars:${map.id}`, map.id];
     const loadX = region.minX;
     const loadZ = region.minZ;
-    const commands = [
-        // The short form is supported by older Bedrock command parsers.
-        `structure load ${structureName} ${loadX} ${baseY} ${loadZ}`,
-        `structure load ${structureName} ${loadX} ${baseY} ${loadZ} 0_degrees none false true false 100`,
-        `structure load ${structureName} ${loadX} ${baseY} ${loadZ} 0_degrees none block_by_block 0 false true false 100`
-    ];
+    const commands = [];
+    for (const structureName of structureNames) {
+        // The short form is supported by older Bedrock command parsers. The
+        // plain-name retry also supports worlds that imported the structure
+        // into the default namespace instead of preserving bedwars:.
+        commands.push(
+            `structure load ${structureName} ${loadX} ${baseY} ${loadZ}`,
+            `structure load ${structureName} ${loadX} ${baseY} ${loadZ} 0_degrees none false true false 100`,
+            `structure load ${structureName} ${loadX} ${baseY} ${loadZ} 0_degrees none block_by_block 0 false true false 100`
+        );
+    }
     for (const command of commands) {
         if (!runMapCommand(game, command)) continue;
         const center = getBlock(game.dimension, {
@@ -510,7 +515,10 @@ function buildMap(game) {
     const centerZ = Math.floor(game.mapOrigin.z);
     runMapCommand(game, `setblock ${centerX} ${baseY + 1} ${centerZ} minecraft:emerald_block replace`);
     runMapCommand(game, `setblock ${centerX + 2} ${baseY + 1} ${centerZ} minecraft:diamond_block replace`);
-    if (built) built = buildArenaBarriers(game, baseY);
+    if (built) {
+        game.barrierBuilt = buildArenaBarriers(game, baseY);
+        built = game.barrierBuilt;
+    }
     game.mapName = map.name;
     game.mapBuilt = built;
     return built;
@@ -524,22 +532,25 @@ function buildArenaBarriers(game, baseY) {
     // The full invisible floor catches a player who falls between islands.
     // The four low walls keep players from walking/bridging out of the
     // temporary arena. Only the floor layer is treated as lethal below.
-    const commands = [
-        `fill ${region.minX} ${floorY} ${region.minZ} ${region.maxX} ${floorY} ${region.maxZ} minecraft:barrier`,
-        `fill ${region.minX} ${floorY + 1} ${region.minZ} ${region.maxX} ${baseY} ${region.minZ} minecraft:barrier`,
-        `fill ${region.minX} ${floorY + 1} ${region.maxZ} ${region.maxX} ${baseY} ${region.maxZ} minecraft:barrier`,
-        `fill ${region.minX} ${floorY + 1} ${region.minZ + 1} ${region.minX} ${baseY} ${region.maxZ - 1} minecraft:barrier`,
-        `fill ${region.maxX} ${floorY + 1} ${region.minZ + 1} ${region.maxX} ${baseY} ${region.maxZ - 1} minecraft:barrier`
-    ];
-    if (!commands.every(command => runMapCommand(game, command))) return false;
-
-    const floor = getBlock(game.dimension, {
-        x: Math.floor(game.mapOrigin.x), y: floorY, z: Math.floor(game.mapOrigin.z)
-    });
-    const wall = getBlock(game.dimension, {
-        x: region.minX, y: baseY, z: Math.floor(game.mapOrigin.z)
-    });
-    return !!floor && !!wall && floor.typeId === "minecraft:barrier" && wall.typeId === "minecraft:barrier";
+    const barrierIds = ["minecraft:barrier", "barrier"];
+    for (const barrierId of barrierIds) {
+        const commands = [
+            `fill ${region.minX} ${floorY} ${region.minZ} ${region.maxX} ${floorY} ${region.maxZ} ${barrierId}`,
+            `fill ${region.minX} ${floorY + 1} ${region.minZ} ${region.maxX} ${baseY} ${region.minZ} ${barrierId}`,
+            `fill ${region.minX} ${floorY + 1} ${region.maxZ} ${region.maxX} ${baseY} ${region.maxZ} ${barrierId}`,
+            `fill ${region.minX} ${floorY + 1} ${region.minZ + 1} ${region.minX} ${baseY} ${region.maxZ - 1} ${barrierId}`,
+            `fill ${region.maxX} ${floorY + 1} ${region.minZ + 1} ${region.maxX} ${baseY} ${region.maxZ - 1} ${barrierId}`
+        ];
+        if (!commands.every(command => runMapCommand(game, command))) continue;
+        const floor = getBlock(game.dimension, {
+            x: Math.floor(game.mapOrigin.x), y: floorY, z: Math.floor(game.mapOrigin.z)
+        });
+        const wall = getBlock(game.dimension, {
+            x: region.minX, y: baseY, z: Math.floor(game.mapOrigin.z)
+        });
+        if (floor && wall && floor.typeId === "minecraft:barrier" && wall.typeId === "minecraft:barrier") return true;
+    }
+    return false;
 }
 
 function cleanupMap(game) {
@@ -793,6 +804,87 @@ function spawnGameBot(game, member) {
     }
 }
 
+function finishGameStart(game, party, players, safeBotCount, host) {
+    if (!party || parties.get(party.code) !== party || !party.memberIds.includes(host.id) ||
+        party.status !== "starting" || !isValid(host)) {
+        cleanupMap(game);
+        if (party && party.status === "starting") party.status = "lobby";
+        return false;
+    }
+
+    const mode = game.mode;
+    const dimension = game.dimension;
+    const combatants = [];
+    for (const player of players.filter(candidate => isValid(candidate))) {
+        const member = createGameMember(player, false, 0, null, getLocation(player));
+        combatants.push(member);
+        game.members.push(member);
+    }
+    if (combatants.length === 0) {
+        cleanupMap(game);
+        party.status = "lobby";
+        safeMessage(host, "§cNo online party members are available to enter the arena.");
+        return false;
+    }
+    for (let index = 0; index < safeBotCount; index += 1) {
+        combatants.push({
+            id: null,
+            name: `Bot ${index + 1}`,
+            isBot: true,
+            team: 0,
+            spawn: null,
+            returnLocation: null,
+            alive: true,
+            eliminated: false,
+            respawnAt: 0,
+            respawning: false
+        });
+    }
+
+    buildGameTeams(game, combatants, mode);
+    if (mode === "bedwars") {
+        const bedsPlaced = game.teams.every(team => placeBed(game, team));
+        if (!bedsPlaced) {
+            for (const team of game.teams) removeBed(game, team.bed);
+            cleanupMap(game);
+            party.status = "lobby";
+            safeMessage(host, "§cBedWars could not place every bed in this area. No one was teleported; try starting again.");
+            return false;
+        }
+    }
+
+    games.set(game.id, game);
+    party.status = "playing";
+    party.gameId = game.id;
+    party.mapVoteSession = null;
+
+    for (const member of game.members) {
+        const player = getPlayerById(member.id);
+        if (!player) continue;
+        addGameTags(player, game, member);
+        playerGames.set(player.id, game.id);
+        teleportEntity(player, member.spawn, dimension);
+        giveStarterKit(player, mode, false, game.giveKits);
+    }
+
+    for (const member of combatants) {
+        if (member.isBot) {
+            game.members.push(member);
+            if (!spawnGameBot(game, member)) {
+                member.eliminated = true;
+                member.alive = false;
+            }
+        }
+    }
+
+    const activeFighters = game.members.filter(member => !member.eliminated).length;
+    notifyParty(party, `§a${modeName(mode)} on ${game.mapName} started with ${activeFighters} fighters.`);
+    notifyParty(party, `§7Map coordinates: ${Math.floor(game.mapOrigin.x)} ${Math.floor(game.mapOrigin.y)} ${Math.floor(game.mapOrigin.z)}`);
+    if (safeBotCount === 0) notifyParty(party, "§eNo bots were added. You can still run a player-only match.");
+    if (activeFighters < 2) notifyParty(party, "§cA bot could not be spawned, so this match may end immediately.");
+    return true;
+}
+
 function startGame(host, mode, botCount, giveKits = true, mapId = "") {
     const party = getPartyForPlayer(host);
     if (!party || party.hostId !== host.id) {
@@ -861,72 +953,32 @@ function startGame(host, mode, botCount, giveKits = true, mapId = "") {
 
     game.map = getMapById(game.mapId);
     game.mapOrigin = getMapOrigin(game);
-    buildMap(game);
-    if (!game.mapBuilt) {
-        cleanupMap(game);
-        safeMessage(host, "§cThe arena could not load a verified structure and safety barrier. Check the behavior pack and try again.");
-        return;
-    }
-
-    const combatants = [];
-    for (const player of players) {
-        const member = createGameMember(player, false, 0, null, getLocation(player));
-        combatants.push(member);
-        game.members.push(member);
-    }
-    for (let index = 0; index < safeBotCount; index += 1) {
-        combatants.push({
-            id: null,
-            name: `Bot ${index + 1}`,
-            isBot: true,
-            team: 0,
-            spawn: null,
-            returnLocation: null,
-            alive: true,
-            eliminated: false,
-            respawnAt: 0,
-            respawning: false
-        });
-    }
-
-    buildGameTeams(game, combatants, mode);
-    if (mode === "bedwars") {
-        const bedsPlaced = game.teams.every(team => placeBed(game, team));
-        if (!bedsPlaced) {
-            for (const team of game.teams) removeBed(game, team.bed);
+    // Structure/ticking-area commands can complete one server tick after they
+    // are issued on older Bedrock runtimes. Keep the party in a short
+    // "starting" state and retry before giving up, rather than exposing a
+    // menu that silently teleports nobody into an unverified arena.
+    party.status = "starting";
+    safeMessage(host, `§ePreparing ${game.map.name} away from the current build. Verifying the arena before teleporting anyone...`);
+    const attemptBuild = attempt => {
+        if (parties.get(party.code) !== party || !party.memberIds.includes(host.id) || party.status !== "starting") {
             cleanupMap(game);
-            safeMessage(host, "§cBedWars could not place every bed in this area. No one was teleported; try starting again in a clear location.");
+            if (parties.get(party.code) === party && party.status === "starting") party.status = "lobby";
             return;
         }
-    }
-
-    games.set(game.id, game);
-    party.status = "playing";
-    party.gameId = game.id;
-    party.mapVoteSession = null;
-
-    for (const member of game.members) {
-        const player = getPlayerById(member.id);
-        if (!player) continue;
-        addGameTags(player, game, member);
-        playerGames.set(player.id, game.id);
-        teleportEntity(player, member.spawn, dimension);
-        giveStarterKit(player, mode, false, game.giveKits);
-    }
-
-    for (const member of combatants) {
-        if (member.isBot) {
-            game.members.push(member);
-            if (!spawnGameBot(game, member)) {
-                member.eliminated = true;
-                member.alive = false;
-            }
+        buildMap(game);
+        if (!game.mapBuilt && attempt < 2) {
+            system.runTimeout(() => attemptBuild(attempt + 1), 2);
+            return;
         }
-    }
-
-    notifyParty(party, `§a${modeName(mode)} on ${game.mapName} started with ${game.members.filter(member => !member.eliminated).length} fighters.`);
-    notifyParty(party, `§7Map coordinates: ${Math.floor(game.mapOrigin.x)} ${Math.floor(game.mapOrigin.y)} ${Math.floor(game.mapOrigin.z)}`);
-    if (safeBotCount === 0) notifyParty(party, "§eNo bots were added. You can still run a player-only match.");
+        if (!game.mapBuilt) {
+            cleanupMap(game);
+            party.status = "lobby";
+            safeMessage(host, "§cThe arena could not load a verified structure and safety barrier after three attempts. Check that the behavior pack is active and try again.");
+            return;
+        }
+        finishGameStart(game, party, players, safeBotCount, host);
+    };
+    attemptBuild(0);
 }
 
 function getAliveMembers(game) {

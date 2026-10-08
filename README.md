@@ -4,7 +4,7 @@ Custom Bots is a Minecraft Bedrock behavior/resource pack for `bot:army21`. The 
 
 ## PvP features
 
-- **Crystal PvP:** when a target is on the ground and in range, the bot places obsidian beside the target, spawns an end crystal, breaks it with an entity attack so it explodes, and repeats the combo three times by default. Bots are protected from their own crystal blast.
+- **Fast crystal PvP:** when a target is on the ground and in range, the bot places obsidian beside the target, spawns an end crystal, and pops it with a valid server-side entity attack after a one-tick placement/pop window. Three-pop combos have a short cooldown, while self-damage protection and the five-block reach limit remain enabled. Bots are protected from their own crystal blast.
 - **Human-range building:** all obsidian placement is limited to a conservative five-block Bedrock survival reach; the command fallback cannot place blocks from far away.
 - **Bridge building:** the bot detects real gaps between itself and a target, places one obsidian block at a time, waits for its movement before placing the next block, and stops after a configurable bridge length. Random clutch/air placement is off by default.
 - **Mace and wind-charge combat:** at close range the bot equips a mace, jumps, and adds a falling smash hit; at mid-range it launches a real Bedrock wind-charge projectile with a short velocity lead before closing in. Special attacks are cooldown-gated and return to sword/crystal behavior.
@@ -12,6 +12,7 @@ Custom Bots is a Minecraft Bedrock behavior/resource pack for `bot:army21`. The 
 - **Competitive movement:** the bot maintains target lock, alternates continuous circle strafing, uses a short hit-select approach delay, counters for a few ticks after being hit, performs a small jump reset after damage, and simulates W-tap/S-tap sprint resets after successful sword hits.
 - **Utility switching:** at roughly four to five blocks it can simulate a fishing-rod knockback cast and immediately return to the sword. When a target has an equipped shield, it briefly switches to an axe before restoring the sword/Mace path. These are server-side approximations where Bedrock does not expose player input or a reliable summonable fishing hook.
 - **Reachable trapping:** low-health or fleeing targets can be trapped with at most two reachable `minecraft:web` placements per target, only when the destination is replaceable and has solid support. No far-away, stationary, or random air placement is used.
+- **Explosive combat sequences:** bots alternate between placing a reachable rail, spawning a TNT minecart, and sending a server-side flame-arrow projectile, and placing TNT followed by reachable fire placement while holding Flint and Steel. The sequences are short state machines with cooldowns and return to ordinary sword/crystal combat instead of blocking it.
 - **Combat movement:** the bot aims at its target, advances at range, retreats when too close, and alternates strafing directions instead of standing still.
 - Existing healing, shield, pearl, jump, critical-hit, target-permission, and equipment systems remain enabled.
 
