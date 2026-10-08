@@ -1228,7 +1228,7 @@ import {
             .button("Pearl")
             .button("Sneak")
             .button("Jump")
-            .button("Mace & Wind Charge")
+            .button("Mace, Spear & Wind Charge")
             .button("Crystal PvP")
             .button("Bridge")
             .button("Combat Movement")
@@ -1257,12 +1257,15 @@ import {
 
     function showMaceWindMenu(player) {
         const mace = PVP_CONFIG.mace;
+        const spear = PVP_CONFIG.spear;
         const wind = PVP_CONFIG.windCharge;
         const form = new ModalFormData()
-            .title("Mace & Wind Charge")
+            .title("Mace, Spear & Wind Charge")
             .toggle("Enable mace smash attacks", mace.enabled)
+            .toggle("Enable Lunge III spear attacks", spear.enabled)
             .toggle("Enable wind charge attacks", wind.enabled)
             .slider("Mace cooldown (ticks)", 20, 160, 5, mace.cooldownTicks)
+            .slider("Spear cooldown (ticks)", 10, 120, 5, spear.cooldownTicks)
             .slider("Wind charge cooldown (ticks)", 20, 160, 5, wind.cooldownTicks)
             .slider("Mace smash bonus damage", 0, 10, 1, mace.smashBonusDamage);
 
@@ -1271,13 +1274,15 @@ import {
                 showMainMenu(player);
                 return;
             }
-            const [maceEnabled, windEnabled, maceCooldown, windCooldown, bonusDamage] = response.formValues;
+            const [maceEnabled, spearEnabled, windEnabled, maceCooldown, spearCooldown, windCooldown, bonusDamage] = response.formValues;
             mace.enabled = maceEnabled;
+            spear.enabled = spearEnabled;
             wind.enabled = windEnabled;
             mace.cooldownTicks = maceCooldown;
+            spear.cooldownTicks = spearCooldown;
             wind.cooldownTicks = windCooldown;
             mace.smashBonusDamage = bonusDamage;
-            player.sendMessage(`§aMace ${maceEnabled ? "enabled" : "disabled"}, wind charge ${windEnabled ? "enabled" : "disabled"}`);
+            player.sendMessage(`§aMace ${maceEnabled ? "enabled" : "disabled"}, Lunge III spear ${spearEnabled ? "enabled" : "disabled"}, wind charge ${windEnabled ? "enabled" : "disabled"}`);
             showMainMenu(player);
         });
     }

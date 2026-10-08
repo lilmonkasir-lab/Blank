@@ -966,14 +966,14 @@ function startGame(host, mode, botCount, giveKits = true, mapId = "") {
             return;
         }
         buildMap(game);
-        if (!game.mapBuilt && attempt < 2) {
+        if (!game.mapBuilt && attempt < 5) {
             system.runTimeout(() => attemptBuild(attempt + 1), 2);
             return;
         }
         if (!game.mapBuilt) {
             cleanupMap(game);
             party.status = "lobby";
-            safeMessage(host, "§cThe arena could not load a verified structure and safety barrier after three attempts. Check that the behavior pack is active and try again.");
+            safeMessage(host, "§cThe arena could not load a verified structure and safety barrier after six attempts. Check that the behavior pack is active and try again.");
             return;
         }
         finishGameStart(game, party, players, safeBotCount, host);
@@ -1462,7 +1462,7 @@ const SHOP_ITEMS = [
     { id: "bow", label: "Bow", cost: { item: "minecraft:gold_ingot", amount: 12 } },
     { id: "arrows", label: "8 Arrows", cost: { item: "minecraft:gold_ingot", amount: 2 } },
     { id: "iron_armor", label: "Iron Armor", cost: { item: "minecraft:gold_ingot", amount: 12 } },
-    { id: "golden_apple", label: "Golden Apple", cost: { item: "minecraft:gold_ingot", amount: 4 } },
+    { id: "notch_apple", label: "Notch Apple", cost: { item: "minecraft:gold_ingot", amount: 8 } },
     { id: "sharpness", label: "Team Sharpness I", cost: { item: "minecraft:diamond", amount: 8 }, max: 1 },
     { id: "protection", label: "Team Protection", cost: { item: "minecraft:diamond", amount: 8 }, max: 3 },
     { id: "haste", label: "Team Haste", cost: { item: "minecraft:diamond", amount: 4 }, max: 2 },
@@ -1564,7 +1564,7 @@ function purchaseShopItem(player, game, itemId) {
     else if (item.id === "bow") giveShopItem(player, "minecraft:bow", 1);
     else if (item.id === "arrows") giveShopItem(player, "minecraft:arrow", 8);
     else if (item.id === "iron_armor") equipIronArmor(player);
-    else if (item.id === "golden_apple") giveShopItem(player, "minecraft:golden_apple", 1);
+    else if (item.id === "notch_apple") giveShopItem(player, "minecraft:enchanted_golden_apple", 1);
     else if (team && team.upgrades[item.id] !== undefined) {
         team.upgrades[item.id] += 1;
         if (item.id === "sharpness") applySharpnessToTeam(game, member.team, team.upgrades[item.id]);
@@ -1738,7 +1738,9 @@ try {
         for (const game of games.values()) {
             if (game.status !== "active") continue;
             const member = findMember(game, removedId);
-            if (!member || member.eliminated) continue;
+            // A Bedrock bot can emit entityRemove immediately after entityDie;
+            // do not turn a scheduled BedWars respawn into an elimination.
+            if (!member || member.eliminated || member.respawning) continue;
             if (member.isBot) {
                 markMemberEliminated(game, member, "was removed from the match.");
             } else {

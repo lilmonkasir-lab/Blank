@@ -43,11 +43,27 @@ export const PVP_CONFIG = {
         enabled: true,
         minimumDistance: 2.5,
         maximumDistance: 3.8,
-        cooldownTicks: 90,
-        activeTicks: 20,
-        jumpImpulse: 0.55,
-        forwardImpulse: 0.04,
-        smashBonusDamage: 5
+        cooldownTicks: 55,
+        activeTicks: 24,
+        jumpImpulse: 0.62,
+        forwardImpulse: 0.08,
+        minimumFallDistance: 0.65,
+        fallDamagePerBlock: 1.5,
+        maxSmashBonusDamage: 14,
+        smashBonusDamage: 6,
+        densityLevel: 5,
+        breachLevel: 4,
+        windBurstLevel: 3
+    },
+    spear: {
+        enabled: true,
+        minimumDistance: 3.2,
+        maximumDistance: 4.5,
+        cooldownTicks: 30,
+        activeTicks: 5,
+        lungeImpulse: 0.72,
+        jabDamage: 4,
+        lungeLevel: 3
     },
     windCharge: {
         enabled: true,
@@ -74,8 +90,12 @@ export const PVP_CONFIG = {
         enabled: true,
         minimumDistance: 4.0,
         maximumDistance: 5.0,
-        activeTicks: 6,
-        cooldownTicks: 90
+        activeTicks: 3,
+        cooldownTicks: 30,
+        pullStrength: 0.72,
+        pullVertical: 0.04,
+        hookSpeed: 2.8,
+        hookLifetimeTicks: 6
     },
     trap: {
         enabled: true,
@@ -148,6 +168,7 @@ const CRYSTAL_BASES = new Set([
 
 const crystalStates = new Map();
 const maceStates = new Map();
+const spearStates = new Map();
 const windChargeStates = new Map();
 const axeStates = new Map();
 const rodStates = new Map();
@@ -650,7 +671,8 @@ function isRodBusy(bot) {
 
 function isSpecialActionBusy(bot) {
     return isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
-        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot);
+        isSpearBusy(bot) || isWindChargeBusy(bot) || isAxeBusy(bot) ||
+        isRodBusy(bot) || isExplosiveBusy(bot);
 }
 
 function finishMaceAttack(bot, state) {
@@ -661,6 +683,16 @@ function finishMaceAttack(bot, state) {
     state.targetId = null;
     state.didSmash = false;
     state.wasAirborne = false;
+    state.launchY = 0;
+    state.peakY = 0;
+    state.fallDistance = 0;
+}
+
+function prepareMace(bot) {
+    equipItem(bot, "minecraft:mace");
+    try { bot.runCommand(`enchant @s density ${PVP_CONFIG.mace.densityLevel}`); } catch (error) {}
+    try { bot.runCommand(`enchant @s breach ${PVP_CONFIG.mace.breachLevel}`); } catch (error) {}
+    try { bot.runCommand(`enchant @s wind_burst ${PVP_CONFIG.mace.windBurstLevel}`); } catch (error) {}
 }
 
 function startMaceAttack(bot, target, tick) {
@@ -671,19 +703,25 @@ function startMaceAttack(bot, target, tick) {
         endTick: 0,
         canSmashAfterTick: 0,
         didSmash: false,
-        wasAirborne: false
+        wasAirborne: false,
+        launchY: 0,
+        peakY: 0,
+        fallDistance: 0
     };
 
     state.phase = "active";
     state.targetId = target.id;
     state.endTick = tick + PVP_CONFIG.mace.activeTicks;
-    state.canSmashAfterTick = tick + 5;
+    state.canSmashAfterTick = tick + 4;
     state.didSmash = false;
     state.wasAirborne = false;
+    state.launchY = bot.location.y;
+    state.peakY = bot.location.y;
+    state.fallDistance = 0;
     maceStates.set(bot.id, state);
     setPvpActionActive(bot, true);
 
-    equipItem(bot, "minecraft:mace");
+    prepareMace(bot);
     faceTarget(bot, target);
     try {
         const direction = getDirection(bot.location, target.location);
@@ -697,20 +735,35 @@ function startMaceAttack(bot, target, tick) {
 
 function applyMaceSmash(attacker, victim, state) {
     if (!isValid(victim)) return false;
+    const fallDistance = Math.max(
+        state.fallDistance || 0,
+        Math.max(0, (state.peakY || attacker.location.y) - attacker.location.y)
+    );
+    if (fallDistance < PVP_CONFIG.mace.minimumFallDistance) return false;
+    const damage = Math.min(
+        PVP_CONFIG.mace.maxSmashBonusDamage,
+        PVP_CONFIG.mace.smashBonusDamage + fallDistance * PVP_CONFIG.mace.fallDamagePerBlock
+    );
     try {
-        victim.applyDamage(PVP_CONFIG.mace.smashBonusDamage, {
+        victim.applyDamage(damage, {
             cause: "entityAttack",
             damagingEntity: attacker
         });
         state.didSmash = true;
         return true;
     } catch (error) {
-        return false;
+        try {
+            victim.runCommand(`damage @s ${Math.max(1, Math.floor(damage))} entity_attack`);
+            state.didSmash = true;
+            return true;
+        } catch (fallbackError) {
+            return false;
+        }
     }
 }
 
 function updateMaceBot(bot, tick) {
-    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot) || isSpearBusy(bot)) return;
     if (!PVP_CONFIG.mace.enabled || isIgnoredBot(bot)) {
         const state = maceStates.get(bot.id);
         if (state && state.phase === "active") finishMaceAttack(bot, state);
@@ -738,23 +791,26 @@ function updateMaceBot(bot, tick) {
 
     if (state.phase === "active") {
         const target = getEntityById(state.targetId);
+        const currentY = bot.location.y;
+        if (currentY > state.peakY) state.peakY = currentY;
+        state.fallDistance = Math.max(0, state.peakY - currentY);
+        if (bot.isOnGround === false) state.wasAirborne = true;
         if (target && isValid(target) && !isIgnoredTarget(target)) {
             faceTarget(bot, target);
             if (state.wasAirborne && bot.isOnGround === true &&
-                tick >= state.canSmashAfterTick && horizontalDistance(bot.location, target.location) <= 4.5) {
+                tick >= state.canSmashAfterTick && horizontalDistance(bot.location, target.location) <= 4.8) {
                 // Native melee normally creates the hit event. This landing
                 // fallback keeps mace combat working on custom entities whose
                 // AI does not report a falling hit consistently.
                 applyMaceSmash(bot, target, state);
             }
         }
-        if (bot.isOnGround === false) state.wasAirborne = true;
         if (tick >= state.endTick || state.didSmash) finishMaceAttack(bot, state);
         return;
     }
 
-    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isWindChargeBusy(bot) ||
-        isAxeBusy(bot) || isRodBusy(bot)) return;
+    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isSpearBusy(bot) ||
+        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot)) return;
     if (bot.isOnGround === false) return;
 
     const target = getNearestTarget(bot, PVP_CONFIG.mace.maximumDistance);
@@ -764,6 +820,127 @@ function updateMaceBot(bot, tick) {
         distance > PVP_CONFIG.mace.maximumDistance) return;
 
     startMaceAttack(bot, target, tick);
+}
+
+function finishSpearAttack(bot, state) {
+    setPvpActionActive(bot, false);
+    restoreWeapon(bot);
+    state.phase = "cooldown";
+    state.cooldownUntil = system.currentTick + PVP_CONFIG.spear.cooldownTicks;
+    state.targetId = null;
+    state.didJab = false;
+}
+
+function prepareSpear(bot) {
+    equipItem(bot, "minecraft:netherite_spear");
+    try { bot.runCommand(`enchant @s lunge ${PVP_CONFIG.spear.lungeLevel}`); } catch (error) {}
+    try { bot.runCommand("enchant @s sharpness 5"); } catch (error) {}
+    try { bot.runCommand("enchant @s unbreaking 3"); } catch (error) {}
+}
+
+function applySpearJab(bot, target, state) {
+    if (!isValid(target) || isIgnoredTarget(target)) return false;
+    const distance = distance3d(bot.location, target.location);
+    if (distance > PVP_CONFIG.spear.maximumDistance + 1.0) return false;
+    try {
+        target.applyDamage(PVP_CONFIG.spear.jabDamage, {
+            cause: "entityAttack",
+            damagingEntity: bot
+        });
+        state.didJab = true;
+        return true;
+    } catch (error) {
+        try {
+            target.runCommand(`damage @s ${PVP_CONFIG.spear.jabDamage} entity_attack`);
+            state.didJab = true;
+            return true;
+        } catch (fallbackError) {
+            return false;
+        }
+    }
+}
+
+function startSpearAttack(bot, target, tick) {
+    const state = spearStates.get(bot.id) || {
+        phase: "idle",
+        cooldownUntil: 0,
+        targetId: null,
+        jabTick: 0,
+        endTick: 0,
+        didJab: false
+    };
+    state.phase = "active";
+    state.targetId = target.id;
+    state.jabTick = tick + 1;
+    state.endTick = tick + PVP_CONFIG.spear.activeTicks;
+    state.didJab = false;
+    spearStates.set(bot.id, state);
+    setPvpActionActive(bot, true);
+    prepareSpear(bot);
+    faceTarget(bot, target);
+    try {
+        const direction = getDirection(bot.location, target.location);
+        bot.applyImpulse({
+            x: direction.x * PVP_CONFIG.spear.lungeImpulse,
+            y: 0.025,
+            z: direction.z * PVP_CONFIG.spear.lungeImpulse
+        });
+    } catch (error) {}
+}
+
+function isSpearBusy(bot) {
+    return spearStates.get(bot.id)?.phase === "active";
+}
+
+function updateSpearBot(bot, tick) {
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
+    if (!PVP_CONFIG.spear.enabled || isIgnoredBot(bot)) {
+        const state = spearStates.get(bot.id);
+        if (state && state.phase === "active") finishSpearAttack(bot, state);
+        return;
+    }
+
+    let state = spearStates.get(bot.id);
+    if (!state) {
+        state = {
+            phase: "idle",
+            cooldownUntil: 0,
+            targetId: null,
+            jabTick: 0,
+            endTick: 0,
+            didJab: false
+        };
+        spearStates.set(bot.id, state);
+    }
+    if (state.phase === "cooldown") {
+        if (tick >= state.cooldownUntil) state.phase = "idle";
+        else return;
+    }
+    if (state.phase === "active") {
+        const target = getEntityById(state.targetId);
+        if (!target || !isValid(target) || isIgnoredTarget(target)) {
+            finishSpearAttack(bot, state);
+            return;
+        }
+        faceTarget(bot, target);
+        if (!state.didJab && tick >= state.jabTick) {
+            applySpearJab(bot, target, state);
+            finishSpearAttack(bot, state);
+            return;
+        }
+        if (tick >= state.endTick) finishSpearAttack(bot, state);
+        return;
+    }
+
+    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
+        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot) ||
+        isExplosiveBusy(bot)) return;
+    const target = getNearestTarget(bot, PVP_CONFIG.spear.maximumDistance);
+    if (!target || isTargetShielding(target)) return;
+    const distance = horizontalDistance(bot.location, target.location);
+    if (distance < PVP_CONFIG.spear.minimumDistance ||
+        distance > PVP_CONFIG.spear.maximumDistance) return;
+    startSpearAttack(bot, target, tick);
 }
 
 function finishAxeAttack(bot, state) {
@@ -793,7 +970,7 @@ function startAxeAttack(bot, target, tick) {
 }
 
 function updateAxeBot(bot, tick) {
-    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot) || isSpearBusy(bot)) return;
     if (!PVP_CONFIG.axe.enabled || isIgnoredBot(bot)) {
         const state = axeStates.get(bot.id);
         if (state && state.phase === "active") finishAxeAttack(bot, state);
@@ -826,7 +1003,7 @@ function updateAxeBot(bot, tick) {
 
     // Axe mode is only a short shield-disabling window. It cannot interrupt
     // crystal placement, bridging, mace timing, wind charges, or a rod cast.
-    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
+    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) || isSpearBusy(bot) ||
         isWindChargeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot)) return;
 
     const target = getNearestTarget(bot, PVP_CONFIG.axe.maximumDistance);
@@ -846,17 +1023,96 @@ function updateAxeBot(bot, tick) {
 function finishRodAction(bot, state) {
     setPvpActionActive(bot, false);
     restoreWeapon(bot);
+    try {
+        const hook = getEntityById(state.hookId);
+        if (hook && isValid(hook)) hook.kill();
+    } catch (error) {}
     state.phase = "cooldown";
     state.cooldownUntil = system.currentTick + PVP_CONFIG.rod.cooldownTicks;
     state.targetId = null;
+    state.hookId = null;
 }
 
-function applyRodKnockback(bot, target) {
-    if (!isValid(target)) return;
+function spawnFishingHook(dimension, location) {
+    const typeIds = ["minecraft:fishing_hook", "fishing_hook"];
+    for (const typeId of typeIds) {
+        try {
+            const hook = dimension.spawnEntity(typeId, location);
+            if (hook) return hook;
+        } catch (error) {}
+    }
     try {
-        const direction = getDirection(bot.location, target.location);
-        target.applyKnockback(direction.x, direction.z, 0.18, 0.04);
+        dimension.runCommand(`summon fishing_hook ${location.x} ${location.y} ${location.z}`);
     } catch (error) {}
+    return getEntityNear(dimension, typeIds, location);
+}
+
+function shootFishingHook(bot, target) {
+    const start = {
+        x: bot.location.x,
+        y: bot.location.y + 1.45,
+        z: bot.location.z
+    };
+    const targetPoint = {
+        x: target.location.x,
+        y: target.location.y + 1.0,
+        z: target.location.z
+    };
+    const dx = targetPoint.x - start.x;
+    const dy = targetPoint.y - start.y;
+    const dz = targetPoint.z - start.z;
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    const direction = { x: dx / length, y: dy / length, z: dz / length };
+    const hook = spawnFishingHook(bot.dimension, start);
+    if (!hook) return null;
+    try {
+        hook.setRotation({
+            x: -Math.atan2(direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z)) * (180 / Math.PI),
+            y: Math.atan2(-direction.x, direction.z) * (180 / Math.PI)
+        });
+        hook.applyImpulse({
+            x: direction.x * PVP_CONFIG.rod.hookSpeed,
+            y: direction.y * PVP_CONFIG.rod.hookSpeed,
+            z: direction.z * PVP_CONFIG.rod.hookSpeed
+        });
+    } catch (error) {}
+    system.runTimeout(() => {
+        try {
+            if (isValid(hook)) hook.kill();
+        } catch (error) {}
+    }, PVP_CONFIG.rod.hookLifetimeTicks);
+    return hook;
+}
+
+function applyRodPull(bot, target) {
+    if (!isValid(target) || isIgnoredTarget(target)) return false;
+    const dx = bot.location.x - target.location.x;
+    const dz = bot.location.z - target.location.z;
+    const length = Math.sqrt(dx * dx + dz * dz);
+    if (length < 0.01 || length > PVP_CONFIG.rod.maximumDistance + 2.0) return false;
+    const direction = { x: dx / length, z: dz / length };
+    try {
+        // Fishing rods pull the hooked entity toward the caster. The direction
+        // is intentionally target-to-bot, unlike a knockback attack.
+        target.applyKnockback(
+            direction.x,
+            direction.z,
+            PVP_CONFIG.rod.pullStrength,
+            PVP_CONFIG.rod.pullVertical
+        );
+        return true;
+    } catch (error) {
+        try {
+            target.applyImpulse({
+                x: direction.x * PVP_CONFIG.rod.pullStrength,
+                y: PVP_CONFIG.rod.pullVertical,
+                z: direction.z * PVP_CONFIG.rod.pullStrength
+            });
+            return true;
+        } catch (fallbackError) {
+            return false;
+        }
+    }
 }
 
 function startRodAction(bot, target, tick) {
@@ -864,6 +1120,7 @@ function startRodAction(bot, target, tick) {
         phase: "idle",
         cooldownUntil: 0,
         targetId: null,
+        hookId: null,
         impactTick: 0,
         endTick: 0,
         didImpact: false
@@ -872,15 +1129,18 @@ function startRodAction(bot, target, tick) {
     state.targetId = target.id;
     state.impactTick = tick + 1;
     state.endTick = tick + PVP_CONFIG.rod.activeTicks;
+    state.hookId = null;
     state.didImpact = false;
     rodStates.set(bot.id, state);
     setPvpActionActive(bot, true);
     equipItem(bot, "minecraft:fishing_rod");
     faceTarget(bot, target);
+    const hook = shootFishingHook(bot, target);
+    if (hook) state.hookId = hook.id;
 }
 
 function updateRodBot(bot, tick) {
-    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot) || isSpearBusy(bot)) return;
     if (!PVP_CONFIG.rod.enabled || isIgnoredBot(bot)) {
         const state = rodStates.get(bot.id);
         if (state && state.phase === "active") finishRodAction(bot, state);
@@ -893,6 +1153,7 @@ function updateRodBot(bot, tick) {
             phase: "idle",
             cooldownUntil: 0,
             targetId: null,
+            hookId: null,
             impactTick: 0,
             endTick: 0,
             didImpact: false
@@ -910,7 +1171,10 @@ function updateRodBot(bot, tick) {
         if (target && isValid(target) && !isIgnoredTarget(target)) {
             faceTarget(bot, target);
             if (!state.didImpact && tick >= state.impactTick) {
-                applyRodKnockback(bot, target);
+                // The hook is fired for a real projectile/visual trail, while
+                // the locked server-side hit guarantees it lands on this enemy
+                // instead of missing due to custom-entity projectile physics.
+                applyRodPull(bot, target);
                 state.didImpact = true;
             }
         }
@@ -919,7 +1183,7 @@ function updateRodBot(bot, tick) {
     }
 
     if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
-        isWindChargeBusy(bot) || isAxeBusy(bot)) return;
+        isSpearBusy(bot) || isWindChargeBusy(bot) || isAxeBusy(bot)) return;
 
     const target = getNearestTarget(bot, PVP_CONFIG.rod.maximumDistance);
     if (!target || isTargetShielding(target)) return;
@@ -953,7 +1217,7 @@ function updateTrapBot(bot, tick) {
     if (isExternalActionBusy(bot)) return;
     if (!PVP_CONFIG.trap.enabled || isIgnoredBot(bot)) return;
     if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
-        isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot) ||
+        isSpearBusy(bot) || isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot) ||
         isExplosiveBusy(bot)) return;
 
     const target = getNearestTarget(bot, 6.5);
@@ -1191,7 +1455,7 @@ function isExplosiveBusy(bot) {
 function updateExplosiveBot(bot, tick) {
     if (isExternalActionBusy(bot)) return;
     if (!PVP_CONFIG.explosives.enabled || isIgnoredBot(bot)) return;
-    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
+    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) || isSpearBusy(bot) ||
         isWindChargeBusy(bot) || isAxeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot)) return;
 
     let state = explosiveStates.get(bot.id);
@@ -1315,7 +1579,7 @@ function startWindCharge(bot, target, tick) {
 }
 
 function updateWindChargeBot(bot, tick) {
-    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot) || isSpearBusy(bot)) return;
     if (!PVP_CONFIG.windCharge.enabled || isIgnoredBot(bot)) {
         const activeState = windChargeStates.get(bot.id);
         if (activeState && activeState.phase === "active") finishWindCharge(bot, activeState);
@@ -1339,7 +1603,7 @@ function updateWindChargeBot(bot, tick) {
         return;
     }
 
-    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) ||
+    if (isCrystalBusy(bot) || isBridgeBusy(bot) || isMaceBusy(bot) || isSpearBusy(bot) ||
         isAxeBusy(bot) || isRodBusy(bot)) return;
 
     const target = getNearestTarget(bot, PVP_CONFIG.windCharge.maximumDistance);
@@ -1530,7 +1794,7 @@ function startCrystalCombo(bot, target) {
 }
 
 function updateCrystalBot(bot, tick) {
-    if (isExternalActionBusy(bot) || isExplosiveBusy(bot)) return;
+    if (isExternalActionBusy(bot) || isExplosiveBusy(bot) || isSpearBusy(bot)) return;
     if (!PVP_CONFIG.crystal.enabled || isIgnoredBot(bot)) {
         const activeState = crystalStates.get(bot.id);
         if (activeState && activeState.phase !== "idle" && activeState.phase !== "cooldown") {
@@ -1541,7 +1805,7 @@ function updateCrystalBot(bot, tick) {
 
     // Do not swap away from a mace, wind charge, or bridge block halfway
     // through that action. Normal sword and crystal logic resumes afterward.
-    if (isBridgeBusy(bot) || isMaceBusy(bot) || isWindChargeBusy(bot) ||
+    if (isBridgeBusy(bot) || isMaceBusy(bot) || isSpearBusy(bot) || isWindChargeBusy(bot) ||
         isAxeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot)) return;
 
     let state = crystalStates.get(bot.id);
@@ -1700,7 +1964,7 @@ function updateBridgeBot(bot, tick) {
     }
     if (tick % Math.max(1, PVP_CONFIG.bridge.checkInterval) !== 0) return;
     if (tick < state.cooldownUntil) return;
-    if (isCrystalBusy(bot) || isMaceBusy(bot) || isWindChargeBusy(bot) ||
+    if (isCrystalBusy(bot) || isMaceBusy(bot) || isSpearBusy(bot) || isWindChargeBusy(bot) ||
         isAxeBusy(bot) || isRodBusy(bot) || isExplosiveBusy(bot)) return;
 
     const target = getNearestTarget(bot, PVP_CONFIG.bridge.targetDistance);
@@ -1764,7 +2028,7 @@ function updateBridgeBot(bot, tick) {
 }
 
 function updateClutch(bot) {
-    if (isExplosiveBusy(bot)) return;
+    if (isExplosiveBusy(bot) || isSpearBusy(bot)) return;
     if (!PVP_CONFIG.bridge.enabled || !PVP_CONFIG.bridge.clutch) return;
     const bridgeState = bridgeStates.get(bot.id);
     if (!bridgeState || !bridgeState.active) return;
@@ -1784,7 +2048,7 @@ function applySprintReset(attacker, victim) {
         !isValid(attacker) || !isValid(victim)) return;
     if (isMaceBusy(attacker) || isWindChargeBusy(attacker) || isAxeBusy(attacker) ||
         isRodBusy(attacker) || isCrystalBusy(attacker) || isBridgeBusy(attacker) ||
-        isExplosiveBusy(attacker) || isExternalActionBusy(attacker)) return;
+        isSpearBusy(attacker) || isExplosiveBusy(attacker) || isExternalActionBusy(attacker)) return;
 
     const direction = getDirection(attacker.location, victim.location);
     try {
@@ -1800,7 +2064,7 @@ function applySprintReset(attacker, victim) {
 
     system.runTimeout(() => {
         if (!isValid(attacker) || !isValid(victim)) return;
-        if (isMaceBusy(attacker) || isWindChargeBusy(attacker) || isAxeBusy(attacker) ||
+        if (isMaceBusy(attacker) || isSpearBusy(attacker) || isWindChargeBusy(attacker) || isAxeBusy(attacker) ||
             isRodBusy(attacker) || isCrystalBusy(attacker) || isBridgeBusy(attacker) ||
             isExternalActionBusy(attacker)) return;
         try {
@@ -1967,6 +2231,9 @@ function cleanupStates() {
     for (const id of maceStates.keys()) {
         if (!activeIds.has(id)) maceStates.delete(id);
     }
+    for (const id of spearStates.keys()) {
+        if (!activeIds.has(id)) spearStates.delete(id);
+    }
     for (const id of windChargeStates.keys()) {
         if (!activeIds.has(id)) windChargeStates.delete(id);
     }
@@ -2004,11 +2271,16 @@ system.runInterval(() => {
                 updateClutch(bot);
                 updateAxeBot(bot, tick);
                 updateRodBot(bot, tick);
+                // A successful rod hit should hand off to crystal placement
+                // on this same server tick when reach, placement, and
+                // self-distance checks are valid. Spear remains next in the
+                // arbitration order when crystal PvP is not currently valid.
+                updateCrystalBot(bot, tick);
+                updateSpearBot(bot, tick);
                 updateTrapBot(bot, tick);
                 updateExplosiveBot(bot, tick);
                 updateMaceBot(bot, tick);
                 updateWindChargeBot(bot, tick);
-                updateCrystalBot(bot, tick);
                 updateCombatBot(bot, tick);
             }
         } catch (error) {}
@@ -2022,6 +2294,7 @@ try {
         const id = event.deadEntity.id;
         crystalStates.delete(id);
         maceStates.delete(id);
+        spearStates.delete(id);
         windChargeStates.delete(id);
         axeStates.delete(id);
         rodStates.delete(id);
@@ -2034,6 +2307,7 @@ try {
         const id = event.removedEntityId;
         crystalStates.delete(id);
         maceStates.delete(id);
+        spearStates.delete(id);
         windChargeStates.delete(id);
         axeStates.delete(id);
         rodStates.delete(id);
