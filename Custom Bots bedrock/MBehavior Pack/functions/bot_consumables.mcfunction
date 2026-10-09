@@ -13,7 +13,7 @@ replaceitem entity @s slot.inventory 10 minecraft:totem_of_undying 1
 replaceitem entity @s slot.weapon.offhand 0 minecraft:totem_of_undying 1
 
 # Potion supplies use the Bedrock potion registry data values used by the
-# native drink_potion goal: healing, swiftness, and fire resistance.
+# native drink_potion goal: healing, swiftness, fire resistance, and strength.
 replaceitem entity @s slot.inventory 11 minecraft:potion 1 21
 replaceitem entity @s slot.inventory 12 minecraft:potion 1 21
 replaceitem entity @s slot.inventory 13 minecraft:potion 1 14
