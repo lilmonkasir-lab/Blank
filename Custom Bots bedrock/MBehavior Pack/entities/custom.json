@@ -188,9 +188,9 @@
           "priority": 1,
           "delay_the_blow": 0.0,
           "reach_multiplier": 3.0,
-          "speed_multiplier": 1.2,
-          "attack_duration": 0.3,
-          "hit_delay_pct": 0.25
+          "speed_multiplier": 1.5,
+          "attack_duration": 0.25,
+          "hit_delay_pct": 0.2
         },
         "minecraft:behavior.melee_attack": {
           "priority": 2,
@@ -206,7 +206,7 @@
           "melee_fov": 360.0
         },
         "minecraft:movement": {
-          "value": 0.3
+          "value": 0.4
         }
       },
       "army21:shield_freeze": {
@@ -218,7 +218,7 @@
           "delay_the_blow": 0.0,
           "reach_multiplier": 0,
           "speed_multiplier": 1.2,
-          "attack_duration": 0.3,
+          "attack_duration": 0.25,
           "hit_delay_pct": 0.4
         },
         "minecraft:behavior.melee_attack": {
@@ -244,7 +244,7 @@
           "delay_the_blow": 0.0,
           "reach_multiplier": 0,
           "speed_multiplier": 1.2,
-          "attack_duration": 0.3,
+          "attack_duration": 0.25,
           "hit_delay_pct": 0.4
         },
         "minecraft:behavior.melee_attack": {
@@ -291,8 +291,14 @@
         "generatesBubbles": false
       },
       "minecraft:health": {
-        "value": 20,
-        "max": 30
+        "value": 80,
+        "max": 80
+      },
+      "minecraft:inventory": {
+        "inventory_size": 256,
+        "container_type": "inventory",
+        "can_be_siphoned_from": false,
+        "private": true
       },
       "minecraft:collision_box": {
         "width": 0.6,
@@ -307,7 +313,7 @@
         "always_show": true
       },
       "minecraft:movement": {
-        "value": 0.3
+        "value": 0.36
       },
       "minecraft:underwater_movement": {
         "value": 0.1275
@@ -369,8 +375,166 @@
             "event": "army21:shield_hit"
           },
           "deals_damage": false
+        },
+        {
+          "cause": "entity_explosion",
+          "on_damage": {
+            "filters": {
+              "test": "has_tag",
+              "value": "bot_crystal_protected"
+            }
+          },
+          "deals_damage": false
+        },
+        {
+          "cause": "block_explosion",
+          "on_damage": {
+            "filters": {
+              "test": "has_tag",
+              "value": "bot_crystal_protected"
+            }
+          },
+          "deals_damage": false
         }
       ],
+      "minecraft:behavior.drink_potion": {
+        "priority": 1,
+        "speed_modifier": -0.15,
+        "potions": [
+          {
+            "id": 21,
+            "chance": 1.0,
+            "filters": {
+              "all_of": [
+                {
+                  "test": "is_missing_health",
+                  "subject": "self",
+                  "value": true
+                },
+                {
+                  "none_of": [
+                    {
+                      "test": "has_tag",
+                      "subject": "self",
+                      "value": "pvp_special_active"
+                    },
+                    {
+                      "test": "has_tag",
+                      "subject": "self",
+                      "value": "pvp_consumable_active"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": 14,
+            "chance": 1.0,
+            "filters": {
+              "all_of": [
+                {
+                  "test": "has_target",
+                  "subject": "self",
+                  "value": true
+                },
+                {
+                  "none_of": [
+                    {
+                      "test": "has_mob_effect",
+                      "subject": "self",
+                      "value": "speed"
+                    },
+                    {
+                      "test": "has_tag",
+                      "subject": "self",
+                      "value": "pvp_special_active"
+                    },
+                    {
+                      "test": "has_tag",
+                      "subject": "self",
+                      "value": "pvp_consumable_active"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": 31,
+            "chance": 1.0,
+            "filters": {
+              "all_of": [
+                {
+                  "test": "has_target",
+                  "subject": "self",
+                  "value": true
+                },
+                {
+                  "none_of": [
+                    {
+                      "test": "has_mob_effect",
+                      "subject": "self",
+                      "value": "strength"
+                    },
+                    {
+                      "test": "has_tag",
+                      "subject": "self",
+                      "value": "pvp_special_active"
+                    },
+                    {
+                      "test": "has_tag",
+                      "subject": "self",
+                      "value": "pvp_consumable_active"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": 12,
+            "chance": 1.0,
+            "filters": {
+              "all_of": [
+                {
+                  "any_of": [
+                    {
+                      "test": "on_fire",
+                      "subject": "self",
+                      "value": true
+                    },
+                    {
+                      "test": "taking_fire_damage",
+                      "subject": "self",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "none_of": [
+                    {
+                      "test": "has_mob_effect",
+                      "subject": "self",
+                      "value": "fire_resistance"
+                    },
+                    {
+                      "test": "has_tag",
+                      "subject": "self",
+                      "value": "pvp_special_active"
+                    },
+                    {
+                      "test": "has_tag",
+                      "subject": "self",
+                      "value": "pvp_consumable_active"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
       "minecraft:behavior.float": {
         "priority": 0
       },
@@ -489,7 +653,7 @@
         }
       },
       "minecraft:loot": {
-        "table": "loot_tables/entities/diamond_loot.json"
+        "table": "loot_tables/entities/diamondl.json"
       }
     },
     "events": {
@@ -741,7 +905,7 @@
           {
             "queue_command": {
               "command": [
-                "replaceitem entity @s slot.weapon.offhand 0 shield",
+                "replaceitem entity @s slot.weapon.offhand 0 minecraft:totem_of_undying 1",
                 "tag @s add shield_ready"
               ]
             }
@@ -894,6 +1058,7 @@
         },
         "queue_command": {
           "command": [
+            "replaceitem entity @s slot.weapon.offhand 0 minecraft:shield 1",
             "tag @s remove shield_ready",
             "tag @s add shield_active",
             "playanimation @s animation.player.custom1"
@@ -915,7 +1080,8 @@
         },
         "queue_command": {
           "command": [
-            "tag @s remove shield_active"
+            "tag @s remove shield_active",
+            "replaceitem entity @s slot.weapon.offhand 0 minecraft:totem_of_undying 1"
           ]
         }
       },
@@ -947,7 +1113,8 @@
         "queue_command": {
           "command": [
             "tag @s remove shield_active",
-            "tag @s add shield_ready"
+            "tag @s add shield_ready",
+            "replaceitem entity @s slot.weapon.offhand 0 minecraft:totem_of_undying 1"
           ]
         }
       },
